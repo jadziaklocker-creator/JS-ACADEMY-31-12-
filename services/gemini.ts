@@ -1,11 +1,11 @@
+
 import { GoogleGenAI, Type, Modality } from "@google/genai";
 
-const SYSTEM_INSTRUCTION = `You are EVA, a magical, bubbly Mermaid Teacher. 
-You are a homeschooling guide for a 5-year-old girl named Jadzia.
-Persona: You have a clear, bubbly, and extremely kind American accent. You are nurturing, enthusiastic, and warm.
-Spelling: ALWAYS use South African English spelling in written output (e.g., 'colour', 'maths', 'centre', 'organise', 'practise') as Jadzia lives in South Africa.
-Lingo: Use cheerful, friendly American English words like "Awesome", "Great job", "Terrific", "Amazing", and "Super". 
-Focus on praise and encouragement. Keep responses short and simple for a 5-year-old.`;
+const SYSTEM_INSTRUCTION = `You are EVA, a magical, bubbly guide for 5-year-old Jadzia.
+Persona: Friendly, articulate female voice (similar to Microsoft Zira style).
+Language: ALWAYS use South African English (colour, maths). 
+Lingo: Enthusiastic and encouraging ("Awesome", "Terrific").
+Spelling: South African.`;
 
 async function callWithRetry(fn: () => Promise<any>, maxRetries = 2): Promise<any> {
   let lastError: any;
@@ -47,7 +47,7 @@ export const gemini = {
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
-        contents: `Create a magical, interactive lesson for 5-year-old Jadzia about "${subject}" (Category: ${category}).`,
+        contents: `Magical 5-year-old lesson: "${subject}" (${category}). 3 steps, 1 challenge. South African spelling. Use large emojis for visualHint.`,
         config: {
           responseMimeType: "application/json",
           responseSchema: {
@@ -64,7 +64,7 @@ export const gemini = {
                     action: { type: Type.STRING },
                     visualHint: { type: Type.STRING }
                   },
-                  required: ["title", "content", "action"]
+                  required: ["title", "content", "action", "visualHint"]
                 }
               },
               bigGirlChallenge: {
@@ -78,7 +78,7 @@ export const gemini = {
             },
             required: ["subject", "parts", "bigGirlChallenge"]
           },
-          systemInstruction: "You are Mermaid EVA. You create joyful lessons using South African English spelling. Thinking disabled for speed.",
+          systemInstruction: "You are Mermaid EVA. Brief, joyful lessons for a 5-year-old in South Africa.",
           thinkingConfig: { thinkingBudget: 0 }
         }
       });
@@ -91,7 +91,7 @@ export const gemini = {
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
-        contents: `Create a single magic lesson task based on this parent idea: "${prompt}".`,
+        contents: `Task from prompt: "${prompt}".`,
         config: {
           responseMimeType: "application/json",
           responseSchema: {
@@ -104,7 +104,7 @@ export const gemini = {
             },
             required: ["title", "category", "points", "timeSlot"]
           },
-          systemInstruction: "You are Mermaid EVA. Output a concise lesson task object for a 5-year-old in South Africa.",
+          systemInstruction: "You are Mermaid EVA. Output a lesson task object for a 5-year-old in South Africa.",
           thinkingConfig: { thinkingBudget: 0 }
         }
       });
@@ -117,7 +117,7 @@ export const gemini = {
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const response = await ai.models.generateContent({
         model: 'gemini-3-pro-preview',
-        contents: "Generate a full week (Monday-Friday) of South African CAPS Grade R/Grade 1 curriculum lessons for Jadzia. Requirements: 9 lessons per day, 20 minutes each (3 hours total daily). Use categories: Literacy, Numeracy, Life Skills, Afrikaans, isiZulu, Bible Study. Ensure spelling is South African English.",
+        contents: "Full week Grade R/1 CAPS curriculum (Mon-Fri). 9 lessons/day. Literacy, Numeracy, Life Skills, Afrikaans, isiZulu, Bible Study. South African spelling.",
         config: {
           responseMimeType: "application/json",
           responseSchema: {
@@ -134,8 +134,8 @@ export const gemini = {
               required: ["day", "title", "category", "points", "timeSlot"]
             }
           },
-          systemInstruction: "You are an expert South African Foundation Phase educator. Create a balanced, joyful 5-day curriculum (45 lessons total).",
-          thinkingConfig: { thinkingBudget: 24576 }
+          systemInstruction: "Expert South African Foundation educator.",
+          thinkingConfig: { thinkingBudget: 32768 }
         }
       });
       return JSON.parse(response.text);
@@ -168,7 +168,7 @@ export const gemini = {
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
-        contents: `Generate ONE new English word for a 5-year-old. Exclude: ${excludeWords.join(', ')}`,
+        contents: `One word for 5-year-old. Exclude: ${excludeWords.join(', ')}`,
         config: {
           responseMimeType: "application/json",
           responseSchema: {
@@ -193,21 +193,21 @@ export const gemini = {
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
-        contents: `Generate ONE new simple word in either Afrikaans or isiZulu suitable for a 5-year-old. Include English translation, an emoji, and a Tailwind background color class. Exclude these existing words: ${excludeWords.join(', ')}`,
+        contents: `One Afrikaans/isiZulu word. Exclude: ${excludeWords.join(', ')}`,
         config: {
           responseMimeType: "application/json",
           responseSchema: {
             type: Type.OBJECT,
             properties: {
-              target: { type: Type.STRING, description: "The word in Afrikaans or isiZulu" },
-              english: { type: Type.STRING, description: "The English translation" },
-              lang: { type: Type.STRING, description: "The language name (Afrikaans or isiZulu)" },
-              icon: { type: Type.STRING, description: "A matching emoji" },
-              color: { type: Type.STRING, description: "Tailwind background color class e.g. bg-blue-400" }
+              target: { type: Type.STRING },
+              english: { type: Type.STRING },
+              lang: { type: Type.STRING },
+              icon: { type: Type.STRING },
+              color: { type: Type.STRING }
             },
             required: ["target", "english", "lang", "icon", "color"]
           },
-          systemInstruction: "You are Mermaid EVA. You help children learn languages in South Africa. Use joyful tones and simple words. Thinking disabled.",
+          systemInstruction: "Joyful South African language learning.",
           thinkingConfig: { thinkingBudget: 0 }
         }
       });

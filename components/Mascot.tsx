@@ -1,8 +1,11 @@
 
 import React, { useState } from 'react';
 
-const Mascot = ({ isSpeaking, isListening, className = "", onClick }: { isSpeaking: boolean; isListening?: boolean; className?: string; onClick?: () => void }) => {
+const Mascot = ({ isSpeaking, isListening, className = "", onClick, customImage }: { isSpeaking: boolean; isListening?: boolean; className?: string; onClick?: () => void, customImage?: string | null }) => {
   const [imageError, setImageError] = useState(false);
+
+  // If a custom image exists, use it. Otherwise, use eva.png or fallback to the improved SVG.
+  const displayImage = customImage || "eva.png";
 
   return (
     <div 
@@ -22,30 +25,67 @@ const Mascot = ({ isSpeaking, isListening, className = "", onClick }: { isSpeaki
         <div className={`w-full h-full relative z-10 p-8 flex items-center justify-center transition-transform duration-700 ${isSpeaking ? 'animate-sway' : 'bouncy'}`}>
           {!imageError ? (
             <img 
-              src="eva.png" 
+              src={displayImage} 
               alt="EVA the Mermaid" 
               className="w-full h-full object-contain drop-shadow-[0_25px_50px_rgba(0,0,0,0.8)] filter contrast-110 saturate-110"
               onError={() => setImageError(true)}
             />
           ) : (
             <svg viewBox="0 0 200 280" className="w-full h-full drop-shadow-[0_20px_40px_rgba(0,0,0,0.6)]">
-              {/* SVG Fallback content (Same as before) */}
               <defs>
-                <linearGradient id="evaHair" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" style={{ stopColor: '#2b1a0d' }} /><stop offset="100%" style={{ stopColor: '#0c0602' }} /></linearGradient>
-                <linearGradient id="evaTail" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" style={{ stopColor: '#00f2fe' }} /><stop offset="100%" style={{ stopColor: '#4facfe' }} /></linearGradient>
-                <linearGradient id="wingGrad" x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="0%" style={{ stopColor: 'rgba(255,182,193,0.5)' }} /><stop offset="100%" style={{ stopColor: 'rgba(176,224,230,0.5)' }} /></linearGradient>
+                <linearGradient id="evaHair" x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" style={{ stopColor: '#f472b6' }} />
+                  <stop offset="50%" style={{ stopColor: '#db2777' }} />
+                  <stop offset="100%" style={{ stopColor: '#9d174d' }} />
+                </linearGradient>
+                <linearGradient id="evaTail" x1="0%" y1="0%" x2="0%" y2="100%">
+                  <stop offset="0%" style={{ stopColor: '#00f2fe' }} />
+                  <stop offset="100%" style={{ stopColor: '#4facfe' }} />
+                </linearGradient>
+                <linearGradient id="wingGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                  <stop offset="0%" style={{ stopColor: 'rgba(255,182,193,0.5)' }} />
+                  <stop offset="100%" style={{ stopColor: 'rgba(176,224,230,0.5)' }} />
+                </linearGradient>
+                <linearGradient id="crownGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+                  <stop offset="0%" style={{ stopColor: '#fbbf24' }} />
+                  <stop offset="100%" style={{ stopColor: '#b45309' }} />
+                </linearGradient>
               </defs>
+
+              {/* Wings */}
               <g className="opacity-70 animate-pulse">
-                <path d="M100 130 Q40 60 20 120 Q20 180 100 160 Z" fill="url(#wingGrad)" /><path d="M100 130 Q160 60 180 120 Q180 180 100 160 Z" fill="url(#wingGrad)" />
+                <path d="M100 130 Q40 60 20 120 Q20 180 100 160 Z" fill="url(#wingGrad)" />
+                <path d="M100 130 Q160 60 180 120 Q180 180 100 160 Z" fill="url(#wingGrad)" />
               </g>
-              <path d="M15 80 C-10 130 20 220 70 250" fill="none" stroke="url(#evaHair)" strokeWidth="60" strokeLinecap="round" />
-              <path d="M185 80 C210 130 180 220 130 250" fill="none" stroke="url(#evaHair)" strokeWidth="60" strokeLinecap="round" />
+
+              {/* MASSIVE BACK HAIR (Prevents the "bald" look) */}
+              <path d="M40 80 Q10 150 20 250 Q100 280 180 250 Q190 150 160 80 Z" fill="url(#evaHair)" />
+
+              {/* Mermaid Tail / Body */}
               <g className={isSpeaking ? 'animate-sway' : ''}>
                 <path d="M70 150 C65 200 85 240 100 270 C115 240 135 200 130 150 Z" fill="url(#evaTail)" />
                 <path d="M100 260 L30 285 Q100 265 170 285 L100 260" fill="#00f2fe" opacity="0.9" />
               </g>
+
+              {/* Head Base */}
               <circle cx="100" cy="80" r="58" fill="#ffe3ca" />
-              <g><circle cx="72" cy="90" r="18" fill="white" /><circle cx="72" cy="90" r="13" fill="#0077b6" /><circle cx="128" cy="90" r="18" fill="white" /><circle cx="128" cy="90" r="13" fill="#0077b6" /></g>
+
+              {/* HAIR BANGS & OVERLAPPING TRESSES (Ensures a full look) */}
+              <path d="M40 80 Q100 10 160 80 L160 120 Q100 90 40 120 Z" fill="url(#evaHair)" />
+              <path d="M40 90 Q20 160 50 220" fill="none" stroke="url(#evaHair)" strokeWidth="30" strokeLinecap="round" />
+              <path d="M160 90 Q180 160 150 220" fill="none" stroke="url(#evaHair)" strokeWidth="30" strokeLinecap="round" />
+
+              {/* Crown */}
+              <path d="M75 35 L85 20 L100 35 L115 20 L125 35 L125 45 L75 45 Z" fill="url(#crownGrad)" stroke="#78350f" strokeWidth="2" />
+              <circle cx="100" cy="30" r="3" fill="#ef4444" /> {/* Gem */}
+
+              {/* Face Features */}
+              <g>
+                <circle cx="72" cy="95" r="15" fill="white" />
+                <circle cx="72" cy="95" r="10" fill="#0077b6" />
+                <circle cx="128" cy="95" r="15" fill="white" />
+                <circle cx="128" cy="95" r="10" fill="#0077b6" />
+              </g>
               <path d={isSpeaking ? "M85 130 Q100 155 115 130" : "M90 135 Q100 142 110 135"} fill="none" stroke="#d64d82" strokeWidth="5" strokeLinecap="round" />
             </svg>
           )}

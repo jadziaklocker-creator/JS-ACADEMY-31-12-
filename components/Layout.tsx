@@ -27,16 +27,20 @@ const Layout: React.FC<LayoutProps> = (props) => {
   const timeStr = currentTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   const dateStr = currentTime.toLocaleDateString([], { weekday: 'long', day: 'numeric', month: 'long' });
   
-  // Use Browser TTS for system messages to provide a "Different Voice"
+  // Use Browser TTS for system messages - prioritizing Microsoft Zira
   const speakSystem = (text: string) => {
     if (!window.speechSynthesis) return;
     window.speechSynthesis.cancel();
     const utterance = new SpeechSynthesisUtterance(text);
-    // Find a female voice that isn't too bubbly
+    
     const voices = window.speechSynthesis.getVoices();
-    const femaleVoice = voices.find(v => v.name.includes('Female') || v.name.includes('Google UK English Female') || v.name.includes('Microsoft Zira'));
-    if (femaleVoice) utterance.voice = femaleVoice;
-    utterance.pitch = 1.0;
+    // Prioritize "Microsoft Zira Desktop" as requested
+    const targetVoice = voices.find(v => v.name.toLowerCase().includes('zira')) 
+                     || voices.find(v => v.name.includes('Female'))
+                     || voices.find(v => v.lang.startsWith('en-US'));
+    
+    if (targetVoice) utterance.voice = targetVoice;
+    utterance.pitch = 1.1; 
     utterance.rate = 1.0;
     window.speechSynthesis.speak(utterance);
   };
@@ -86,7 +90,6 @@ const Layout: React.FC<LayoutProps> = (props) => {
           </div>
         </div>
 
-        {/* Integrated Navigation at Top - High Contrast */}
         {!hideNav && (
           <nav className="flex justify-between items-center bg-white/95 backdrop-blur-3xl p-3 rounded-[3rem] border-4 border-white/30 shadow-inner w-full max-w-4xl mx-auto pointer-events-auto">
             {tabs.map((tab) => (

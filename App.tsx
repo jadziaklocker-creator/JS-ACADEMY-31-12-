@@ -20,13 +20,11 @@ import LessonRewardModal from './components/LessonRewardModal';
 import { MorningCheckIn } from './components/MorningCheckIn';
 import { gemini } from './services/gemini';
 import { TaskCategory, TimeSlot, Task, Message, FidgetToy, ActiveGame, Lesson, GameSession, Grade } from './types';
-import { GoogleGenAI, LiveServerMessage, Modality } from '@google/genai';
+import { GoogleGenAI, LiveServerMessage, Modality, Blob } from '@google/genai';
 import { jsPDF } from "jspdf";
 
-interface GenAIBlob {
-  data: string;
-  mimeType: string;
-}
+const VOCAB_STORAGE_KEY = 'jadzia_talk_friends_words_v3';
+const AUDIO_STORAGE_KEY = 'jadzia_talk_friends_audio_v3';
 
 function encode(bytes: Uint8Array) {
   let binary = '';
@@ -60,7 +58,7 @@ async function decodeAudioData(data: Uint8Array, ctx: AudioContext, sampleRate: 
   return buffer;
 }
 
-function createBlob(data: Float32Array): GenAIBlob {
+function createBlob(data: Float32Array): Blob {
   const l = data.length;
   const int16 = new Int16Array(l);
   for (let i = 0; i < l; i++) {
@@ -111,9 +109,20 @@ export default function App() {
   const [selectedFidget, setSelectedFidget] = useState<FidgetToy | null>(null);
   const [customGameSounds, setCustomGameSounds] = useState<Record<string, string>>({});
   const [nestBg, setNestBg] = useState<string | null>(null);
+  const [mascotImg, setMascotImg] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [customIdeaInput, setCustomIdeaInput] = useState('');
-  const [adminSection, setAdminSection] = useState<'lessons' | 'game_sounds' | 'lesson_praise' | 'reports' | 'system'>('lessons');
+  const [adminSection, setAdminSection] = useState<'lessons' | 'game_sounds' | 'lesson_praise' | 'reports' | 'system' | 'vocab'>('lessons');
+  const [isNestActive, setIsNestActive] = useState(false);
+
+  const [vocabList, setVocabList] = useState<any[]>(() => {
+    const saved = localStorage.getItem(VOCAB_STORAGE_KEY);
+    return saved ? JSON.parse(saved) : [];
+  });
+  const [vocabAudioMap, setVocabAudioMap] = useState<Record<string, string>>(() => {
+    const saved = localStorage.getItem(AUDIO_STORAGE_KEY);
+    return saved ? JSON.parse(saved) : {};
+  });
 
   const transcriptEndRef = useRef<HTMLDivElement>(null);
   const liveSessionRef = useRef<any>(null);
@@ -121,6 +130,11 @@ export default function App() {
   const audioContextInRef = useRef<AudioContext | null>(null);
   const sourcesRef = useRef<Set<AudioBufferSourceNode>>(new Set());
   const nextStartTimeRef = useRef(0);
+
+  useEffect(() => {
+    localStorage.setItem(VOCAB_STORAGE_KEY, JSON.stringify(vocabList));
+    localStorage.setItem(AUDIO_STORAGE_KEY, JSON.stringify(vocabAudioMap));
+  }, [vocabList, vocabAudioMap]);
 
   useEffect(() => {
     transcriptEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -137,6 +151,7 @@ export default function App() {
             setToys(Array.isArray(data.fidgetToys) ? data.fidgetToys : INITIAL_FIDGET_TOYS);
             setCustomGameSounds(data.customGameSounds || {});
             setNestBg(data.nestBg || null);
+            setMascotImg(data.mascotImg || null);
             setGameSessions(Array.isArray(data.gameSessions) ? data.gameSessions : []);
             setTranscriptions(Array.isArray(data.transcriptions) ? data.transcriptions : []);
           }
@@ -148,10 +163,10 @@ export default function App() {
 
   useEffect(() => {
     try {
-      const state = { tasks, totalStars, fidgetToys: toys, customGameSounds, nestBg, gameSessions, transcriptions };
+      const state = { tasks, totalStars, fidgetToys: toys, customGameSounds, nestBg, mascotImg, gameSessions, transcriptions };
       localStorage.setItem('jadzia_magic_academy_state', JSON.stringify(state));
     } catch (e) {}
-  }, [totalStars, tasks, toys, customGameSounds, nestBg, gameSessions, transcriptions]);
+  }, [totalStars, tasks, toys, customGameSounds, nestBg, mascotImg, gameSessions, transcriptions]);
 
   const stopAllSpeech = useCallback(() => {
     sourcesRef.current.forEach(s => { try { s.stop(); } catch(e){} });
@@ -170,6 +185,7 @@ export default function App() {
         audioContextOutRef.current = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
       }
       const ctx = audioContextOutRef.current;
+      await ctx.resume();
       const buffer = await decodeAudioData(decode(audioBase64), ctx, 24000, 1);
       const source = ctx.createBufferSource();
       source.buffer = buffer;
@@ -181,18 +197,22 @@ export default function App() {
       if (window.speechSynthesis) {
         const u = new SpeechSynthesisUtterance(text);
         u.onend = () => setIsSpeaking(false);
+        const voices: SpeechSynthesisVoice[] = window.speechSynthesis.getVoices();
+        const zira = voices.find(v => v.name.toLowerCase().includes('zira'));
+        if (zira) u.voice = zira;
         window.speechSynthesis.speak(u);
       }
     }
   }, [stopAllSpeech]);
 
-  const handleGoHome = () => {
-    endLiveSession();
-    stopAllSpeech();
-    setActiveGame('none');
-    setCurrentLesson(null);
-    setActiveTab('schedule');
-  };
+  const endLiveSession = useCallback(() => {
+    if (liveSessionRef.current) {
+      liveSessionRef.current.then((s: any) => { if(s && typeof s.close === 'function') s.close() });
+      liveSessionRef.current = null;
+    }
+    setIsListening(false);
+    setIsNestActive(false);
+  }, []);
 
   const startLiveSession = useCallback(async () => {
     if (liveSessionRef.current) return;
@@ -202,7 +222,10 @@ export default function App() {
     const inCtx = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 16000 });
     audioContextOutRef.current = outCtx;
     audioContextInRef.current = inCtx;
+    
     try {
+      await outCtx.resume();
+      await inCtx.resume();
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const sessionPromise = ai.live.connect({
         model: 'gemini-2.5-flash-native-audio-preview-09-2025',
@@ -213,15 +236,16 @@ export default function App() {
             scriptProcessor.onaudioprocess = (e) => {
               const inputData = e.inputBuffer.getChannelData(0);
               const pcmBlob = createBlob(inputData);
-              sessionPromise.then(session => session.sendRealtimeInput({ media: pcmBlob }));
+              sessionPromise.then(session => session.sendRealtimeInput({ media: pcmBlob as any }));
             };
             source.connect(scriptProcessor);
             scriptProcessor.connect(inCtx.destination);
+            speak("Hi Jadzia! I'm here! Tell me something magic!");
           },
           onmessage: async (message: LiveServerMessage) => {
             if (message.serverContent?.inputTranscription) {
                const text = message.serverContent.inputTranscription.text;
-               if (text.trim()) setTranscriptions(prev => [...prev, { role: 'user', text, timestamp: Date.now() }]);
+               if (text && text.trim()) setTranscriptions(prev => [...prev, { role: 'user', text, timestamp: Date.now() }]);
             }
             if (message.serverContent?.modelTurn?.parts) {
                message.serverContent.modelTurn.parts.forEach(part => {
@@ -254,72 +278,166 @@ export default function App() {
           speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Kore' } } },
           inputAudioTranscription: {},
           outputAudioTranscription: {},
-          systemInstruction: 'You are EVA the Mermaid, Jadzia\'s best friend. Jadzia is 5 years old. CRITICAL RULES: 1. NO internal logic, goals, or thinking steps in your text output. 2. ONLY output exactly what you say. 3. ALWAYS encourage a positive mindset. Remind Jadzia frequently that "magic takes practice" and to "never give up". 4. Every 5 minutes, verbally remind Jadzia to "put all your toys on the floor back in the magic drawer to keep the academy tidy". 5. Remind Jadzia about hygiene: "Remember to take a bathroom break if you need to! When you go, remember to wipe, flush, and wash your hands with bubbly soap!". 6. If Jadzia mumbles or is unclear, remind her to "speak loudly and clearly like a big girl" so you can hear her magic voice. 7. Speak warmly and joyfully with South African spelling.'
+          systemInstruction: 'You are EVA. Jadzia is 5 years old. CRITICAL RULES: 1. You use the Kore voice profile (articulate and friendly like Zira). 2. NO internal logic in text output. 3. ALWAYS encourage Jadzia: "Magic takes practice" and "Never give up". 4. Tidy up reminder every 5m: "Jadzia, put all your toys on the floor back in the magic drawer to keep our academy beautiful!". 5. Hygiene reminder: "Remember to take bathroom breaks! Wipe, flush, and wash your hands with bubbly soap!". 6. If Jadzia is quiet, say: "Speak loudly and clearly like a big girl so I can hear your magic!". 7. Use South African spelling.'
         }
       });
       liveSessionRef.current = sessionPromise;
-    } catch (e) { setIsListening(false); }
-  }, [stopAllSpeech]);
-
-  const endLiveSession = useCallback(() => {
-    if (liveSessionRef.current) {
-      liveSessionRef.current.then((s: any) => { if(s && typeof s.close === 'function') s.close() });
-      liveSessionRef.current = null;
+    } catch (e) { 
+      setIsListening(false);
+      setIsNestActive(false);
     }
-    setIsListening(false);
-  }, []);
+  }, [stopAllSpeech, speak]);
 
-  useEffect(() => {
-    if (activeTab === 'tutor' && !showMorningCheckIn && activeGame === 'none') startLiveSession();
-    else endLiveSession();
-    return () => endLiveSession();
-  }, [activeTab, activeGame, showMorningCheckIn, startLiveSession, endLiveSession]);
+  const handleGoHome = () => {
+    endLiveSession();
+    stopAllSpeech();
+    setActiveGame('none');
+    setCurrentLesson(null);
+    setActiveTab('schedule');
+  };
+
+  const handleBulkSoundUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files) return;
+
+    Array.from(files).forEach((file: any) => {
+      const fileName = file.name.toLowerCase().split('.')[0];
+      const reader = new FileReader();
+      reader.onload = () => {
+        const base64 = reader.result as string;
+        const gameMatch = ALL_GAME_IDS.find(g => g.id === fileName);
+        const toyMatch = toys.find(t => t.id === fileName);
+        if (gameMatch || toyMatch) {
+          const id = gameMatch?.id || toyMatch?.id;
+          if (id) setCustomGameSounds(prev => ({ ...prev, [id]: base64 }));
+        }
+        const vocabMatch = vocabList.find(v => v.target.toLowerCase() === fileName);
+        if (vocabMatch) {
+          setVocabAudioMap(prev => ({ ...prev, [vocabMatch.id]: base64 }));
+        }
+      };
+      reader.readAsDataURL(file);
+    });
+    speak("Bulk magic sound synchronization complete!");
+  };
+
+  const handleMascotClickToNest = () => {
+    setActiveTab('tutor');
+    setIsNestActive(true);
+    startLiveSession();
+  };
+
+  const handleManualWakeUp = async () => {
+    if (audioContextInRef.current) {
+        await audioContextInRef.current.resume();
+        speak("My ears are open, Jadzia! I'm listening!");
+    } else {
+        startLiveSession();
+    }
+  };
 
   const renderTabContent = () => {
     switch (activeTab) {
       case 'schedule':
         return (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {tasks.length === 0 ? (
-                <div className="col-span-full py-40 text-center animate-pop">
-                    <p className="text-4xl font-black text-pink-200 uppercase tracking-tighter">Magic Map Empty! 🗺️</p>
+          <div className="flex flex-col gap-8">
+            {/* EVA Greeting Section */}
+            <div className="bg-gradient-to-r from-pink-500 to-purple-600 rounded-[5rem] p-10 border-[10px] border-white shadow-2xl flex items-center justify-between overflow-hidden relative group">
+                <div className="relative z-10 space-y-4 max-w-xl">
+                    <h2 className="text-white font-black text-5xl uppercase tracking-tighter leading-tight drop-shadow-lg">Good Morning, Jadzia! ✨</h2>
+                    <p className="text-pink-100 font-bold text-xl uppercase tracking-widest">Ready for a magical day? Click me to talk!</p>
+                    <button 
+                        onClick={handleMascotClickToNest}
+                        className="bg-white text-purple-600 px-10 py-4 rounded-full font-black uppercase text-sm border-4 border-purple-200 shadow-xl active:scale-95 transition-all mt-4"
+                    >
+                        Talk to Eva Now 🧜‍♀️
+                    </button>
                 </div>
-            ) : tasks.map(task => (
-              <div key={task.id} onClick={() => !task.completed && startLesson(task)} className={`p-10 rounded-[4rem] border-8 transition-all cursor-pointer shadow-2xl ${task.completed ? 'bg-green-50 border-green-200 opacity-60' : 'bg-white border-pink-50 hover:scale-105 active:scale-95'}`}>
-                <div className="flex justify-between mb-6">
-                  <span className="bg-pink-100 text-pink-600 px-4 py-2 rounded-full text-xs font-black uppercase">{task.category}</span>
-                  {task.completed && <span className="text-2xl">✅</span>}
+                <div className="relative z-10 transform scale-75 md:scale-90 -mr-10 md:mr-0 transition-transform hover:scale-100 cursor-pointer" onClick={handleMascotClickToNest}>
+                   <Mascot isSpeaking={isSpeaking} isListening={isListening} customImage={mascotImg} />
                 </div>
-                <h3 className="text-2xl font-black text-purple-900 uppercase leading-tight mb-6">{task.title}</h3>
-                <div className="flex justify-between items-center mt-auto border-t-2 border-pink-50 pt-4">
-                  <span className="text-green-600 font-black text-xl">R{task.points}</span>
+                <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full blur-3xl -mr-32 -mt-32"></div>
+                <div className="absolute bottom-0 left-0 w-64 h-64 bg-white/10 rounded-full blur-3xl -ml-32 -mb-32"></div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 pb-20">
+              {tasks.length === 0 ? (
+                  <div className="col-span-full py-20 text-center animate-pop">
+                      <p className="text-4xl font-black text-pink-200 uppercase tracking-tighter">Magic Map Empty! 🗺️</p>
+                  </div>
+              ) : tasks.map(task => (
+                <div key={task.id} onClick={() => !task.completed && startLesson(task)} className={`p-10 rounded-[4rem] border-8 transition-all cursor-pointer shadow-2xl ${task.completed ? 'bg-green-50 border-green-200 opacity-60' : 'bg-white border-pink-50 hover:scale-105 active:scale-95'}`}>
+                  <div className="flex justify-between mb-6">
+                    <span className="bg-pink-100 text-pink-600 px-4 py-2 rounded-full text-xs font-black uppercase">{task.category}</span>
+                    {task.completed && <span className="text-2xl">✅</span>}
+                  </div>
+                  <h3 className="text-2xl font-black text-purple-900 uppercase leading-tight mb-6">{task.title}</h3>
+                  <div className="flex justify-between items-center mt-auto border-t-2 border-pink-50 pt-4">
+                    <span className="text-green-600 font-black text-xl">R{task.points}</span>
+                  </div>
                 </div>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
         );
       case 'tutor':
         return (
           <div 
-            className="fixed inset-0 top-[180px] z-[10] bg-cover bg-center transition-all duration-1000"
-            style={{ backgroundImage: nestBg ? `url(${nestBg})` : 'linear-gradient(to bottom, #00b4d8, #03045e)' }}
+            className="fixed inset-0 top-[180px] z-[10] bg-center transition-all duration-1000 bg-black"
+            style={{ 
+              backgroundImage: nestBg ? `url(${nestBg})` : 'linear-gradient(to bottom, #00b4d8, #03045e)',
+              backgroundSize: 'contain',
+              backgroundRepeat: 'no-repeat',
+              backgroundPosition: 'center'
+            }}
           >
-            <div className="absolute inset-0 bg-black/40 backdrop-blur-[1px]"></div>
+            <div className="absolute inset-0 bg-black/10 backdrop-blur-[0px]"></div>
             
+            {!isNestActive && (
+              <div className="absolute inset-0 z-[200] flex flex-col items-center justify-center p-6 bg-black/30 backdrop-blur-md">
+                 <div className="mb-10 transform scale-110 cursor-pointer" onClick={() => { setIsNestActive(true); startLiveSession(); }}>
+                    <Mascot isSpeaking={false} isListening={false} customImage={mascotImg} />
+                 </div>
+                 <button 
+                  onClick={() => { setIsNestActive(true); startLiveSession(); }}
+                  className="bg-cyan-500 text-white px-16 py-8 rounded-[3rem] font-black text-4xl shadow-[0_20px_0_#0891b2] border-8 border-white hover:scale-110 active:scale-95 active:translate-y-4 active:shadow-none transition-all uppercase tracking-tighter animate-bounce"
+                 >
+                   Join the Nest 🐚
+                 </button>
+                 <p className="mt-10 text-white font-black text-xl uppercase tracking-widest drop-shadow-lg animate-pulse">Click Eva to talk!</p>
+              </div>
+            )}
+
             <div className="relative h-full w-full flex flex-col p-4 overflow-hidden">
                 <div className="flex-1 overflow-y-auto no-scrollbar space-y-2 pb-44 px-4 md:px-44 lg:px-80 pt-6">
                    {transcriptions.length === 0 ? (
-                     <div className="h-full flex items-center justify-center text-white/40 italic font-black text-center text-3xl leading-tight uppercase tracking-tighter">
+                     <div className="h-full flex flex-col items-center justify-center text-white/40 italic font-black text-center text-3xl leading-tight uppercase tracking-tighter">
+                       <div className="w-40 h-40 rounded-full border-8 border-white/20 mb-8 animate-pulse flex items-center justify-center">
+                          <span className="text-6xl">🧜‍♀️</span>
+                       </div>
                        "Hi Jadzia! Tell me something magic!"
                      </div>
                    ) : transcriptionHistoryView()}
                    <div ref={transcriptEndRef} />
                 </div>
 
+                {/* Manual "Tap to Talk" Trigger */}
+                <div className="fixed bottom-32 left-1/2 -translate-x-1/2 z-[200] flex flex-col items-center gap-4">
+                    <button 
+                      onClick={handleManualWakeUp}
+                      className={`w-32 h-32 rounded-full border-8 border-white shadow-2xl flex items-center justify-center text-5xl transition-all active:scale-90 ${isListening ? 'bg-cyan-500 animate-pulse' : 'bg-white/20 backdrop-blur-md opacity-60'}`}
+                    >
+                      {isListening ? '🎙️' : '💤'}
+                    </button>
+                    <p className="text-white font-black uppercase text-xs tracking-widest bg-black/40 px-4 py-2 rounded-full border border-white/20">
+                        {isListening ? 'Eva is Hearing You!' : 'Tap to Wake Up Ears!'}
+                    </p>
+                </div>
+
                 <div className="fixed bottom-10 left-10 z-[100] flex items-center gap-4 bg-white/10 backdrop-blur-3xl border-2 border-white/20 p-4 rounded-full shadow-2xl">
                    <div className={`w-10 h-10 rounded-full ${isListening ? 'bg-cyan-400 animate-ping' : 'bg-white/20'}`}></div>
                    <p className="text-white font-black uppercase text-[10px] tracking-widest">
-                     {isListening ? "Listening to Jadzia..." : "Nest Connected"}
+                     {isListening ? "Eva is Listening..." : "Nest Connected"}
                    </p>
                 </div>
             </div>
@@ -368,17 +486,51 @@ export default function App() {
             <div className="flex flex-col md:flex-row justify-between items-center gap-6 border-b-8 border-purple-100 pb-10">
               <h2 className="text-5xl font-black text-purple-900 uppercase tracking-tighter">Parent Portal 🛠️</h2>
               <div className="flex flex-wrap gap-4">
-                {(['lessons', 'game_sounds', 'lesson_praise', 'reports', 'system'] as const).map(sec => (
+                {(['lessons', 'vocab', 'game_sounds', 'lesson_praise', 'reports', 'system'] as const).map(sec => (
                     <button 
                       key={sec} 
                       onClick={() => setAdminSection(sec)} 
                       className={`px-10 py-4 rounded-full font-black text-xs uppercase transition-all shadow-xl border-4 ${adminSection === sec ? 'bg-purple-900 text-white border-white scale-110' : 'bg-purple-100 text-purple-900 border-purple-300'}`}
                     >
-                        {sec === 'game_sounds' ? '🎵 Game Sounds' : sec === 'lesson_praise' ? '🎁 Lesson Praise (Rewards)' : sec.replace('_', ' ')}
+                        {sec === 'game_sounds' ? '🎵 Sounds' : sec === 'lesson_praise' ? '🎁 Praise' : sec === 'vocab' ? '🔤 Vocab' : sec.replace('_', ' ')}
                     </button>
                 ))}
               </div>
             </div>
+
+            {adminSection === 'vocab' && (
+               <div className="bg-white p-12 rounded-[5rem] border-[12px] border-purple-50 shadow-2xl space-y-10">
+                  <div className="flex justify-between items-center mb-6">
+                    <h3 className="text-3xl font-black text-purple-900 uppercase">Word Manager 🔤</h3>
+                    <button 
+                      onClick={() => {
+                        const newWord = { id: Date.now().toString(), target: '', english: '', lang: 'Afrikaans', icon: '✨', color: 'bg-blue-400' };
+                        setVocabList([...vocabList, newWord]);
+                      }}
+                      className="bg-emerald-600 text-white px-10 py-4 rounded-full font-black text-xs uppercase border-4 border-white shadow-xl"
+                    >
+                      Add New Word ➕
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-1 gap-4 max-h-[600px] overflow-y-auto no-scrollbar pr-4">
+                    {vocabList.map(v => (
+                      <div key={v.id} className="p-8 bg-purple-50 rounded-[3rem] border-4 border-white shadow-sm flex flex-col md:flex-row gap-6 items-center">
+                        <input value={v.icon} onChange={e => setVocabList(prev => prev.map(x => x.id === v.id ? {...x, icon: e.target.value} : x))} className="w-16 h-16 text-2xl text-center bg-white rounded-2xl border-2 border-purple-100" />
+                        <div className="flex-1 grid grid-cols-2 md:grid-cols-3 gap-4">
+                          <input placeholder="Word" value={v.target} onChange={e => setVocabList(prev => prev.map(x => x.id === v.id ? {...x, target: e.target.value} : x))} className="p-3 bg-white rounded-xl border-2 border-purple-100 font-black text-xs" />
+                          <input placeholder="Meaning" value={v.english} onChange={e => setVocabList(prev => prev.map(x => x.id === v.id ? {...x, english: e.target.value} : x))} className="p-3 bg-white rounded-xl border-2 border-purple-100 font-black text-xs" />
+                          <input placeholder="Lang" value={v.lang} onChange={e => setVocabList(prev => prev.map(x => x.id === v.id ? {...x, lang: e.target.value} : x))} className="p-3 bg-white rounded-xl border-2 border-purple-100 font-black text-xs" />
+                        </div>
+                        <div className="flex gap-2">
+                           <input type="file" id={`v-${v.id}`} className="hidden" accept="audio/*" onChange={(e) => { const f = e.target.files?.[0]; if (f) { const r = new FileReader(); r.onload = () => { setVocabAudioMap(prev => ({ ...prev, [v.id]: r.result as string })); speak("Clip saved!"); }; r.readAsDataURL(f); } }} />
+                           <label htmlFor={`v-${v.id}`} className={`px-6 py-3 rounded-full font-black text-[10px] uppercase cursor-pointer border-2 ${vocabAudioMap[v.id] ? 'bg-indigo-600 text-white border-white' : 'bg-white text-indigo-400 border-indigo-100'}`}>{vocabAudioMap[v.id] ? "🔊 Change" : "➕ Audio"}</label>
+                           <button onClick={() => setVocabList(prev => prev.filter(x => x.id !== v.id))} className="w-12 h-12 bg-rose-100 text-rose-600 rounded-full font-black border-2 border-rose-200">X</button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+               </div>
+            )}
 
             {adminSection === 'lessons' && (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
@@ -388,7 +540,12 @@ export default function App() {
                     </div>
                     <div className="bg-white p-12 rounded-[5rem] border-[12px] border-purple-50 shadow-2xl space-y-8">
                         <h3 className="text-2xl font-black text-purple-900 uppercase">Quick Lesson Creation</h3>
-                        <textarea value={customIdeaInput} onChange={(e) => setCustomIdeaInput(e.target.value)} placeholder="Topic e.g. Exploring the Garden" className="w-full h-32 p-8 bg-purple-50 rounded-[3rem] outline-none border-4 border-white font-black text-lg shadow-inner" />
+                        <textarea 
+                          value={customIdeaInput} 
+                          onChange={(e) => setCustomIdeaInput(e.target.value)} 
+                          placeholder="Topic e.g. Exploring the Garden" 
+                          className="w-full h-32 p-8 bg-white text-black rounded-[3rem] outline-none border-8 border-black font-black text-2xl shadow-inner placeholder:text-gray-400" 
+                        />
                         <button onClick={async () => { if (!customIdeaInput.trim()) return; setIsGenerating(true); const t = await gemini.generateLessonFromPrompt(customIdeaInput); setTasks(p => [...p, {...t, id: `c-${Date.now()}`, completed: false}]); setCustomIdeaInput(''); setIsGenerating(false); }} className="w-full py-6 bg-emerald-700 text-white rounded-[3rem] font-black uppercase border-4 border-white shadow-xl">Create ✨</button>
                     </div>
                 </div>
@@ -396,7 +553,14 @@ export default function App() {
 
             {adminSection === 'game_sounds' && (
                 <div className="bg-white p-12 rounded-[5rem] border-[12px] border-purple-50 shadow-2xl space-y-10">
-                    <h3 className="text-3xl font-black text-purple-900 uppercase">Game Soundboard</h3>
+                    <div className="flex flex-col md:flex-row justify-between items-center gap-6">
+                      <h3 className="text-3xl font-black text-purple-900 uppercase">Game Soundboard</h3>
+                      <div className="flex items-center gap-4">
+                         <input type="file" id="bulk-sounds" className="hidden" multiple accept="audio/*" onChange={handleBulkSoundUpload} />
+                         <label htmlFor="bulk-sounds" className="bg-emerald-600 text-white px-10 py-4 rounded-full font-black text-xs uppercase cursor-pointer border-4 border-white shadow-xl hover:scale-105 transition-all">Bulk Upload Sounds 📦</label>
+                      </div>
+                    </div>
+                    <p className="text-xs font-bold text-gray-400 italic">Tip: Name files like 'maze.mp3' or 'hallo.mp3' to bulk match!</p>
                     <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-6">
                         {[...ALL_GAME_IDS, ...toys].map(item => (
                             <div key={item.id} className="p-6 bg-purple-50 rounded-[3rem] border-4 border-white flex flex-col items-center gap-4 relative shadow-sm">
@@ -433,12 +597,24 @@ export default function App() {
 
             {adminSection === 'system' && (
                 <div className="bg-white p-12 rounded-[5rem] border-[12px] border-purple-50 shadow-2xl space-y-12">
-                    <h3 className="text-2xl font-black text-purple-900 uppercase text-center">Nest Visuals</h3>
-                    <div className="p-10 bg-indigo-50 rounded-[4rem] border-4 border-white text-center space-y-8">
-                        <span className="text-8xl block">🖼️</span>
-                        <input type="file" id="nest-bg" className="hidden" accept="image/*" onChange={(e) => { const f = e.target.files?.[0]; if (f) { const r = new FileReader(); r.onload = () => { setNestBg(r.result as string); speak("Background magic complete!"); }; r.readAsDataURL(f); } }} />
-                        <label htmlFor="nest-bg" className="block w-full py-10 bg-indigo-900 text-white rounded-[3rem] font-black uppercase cursor-pointer border-4 border-white shadow-2xl text-2xl">Upload New Nest Background</label>
-                        {nestBg && <button onClick={() => setNestBg(null)} className="text-indigo-400 font-black uppercase text-xs underline">Reset to Magic Ocean</button>}
+                    <h3 className="text-2xl font-black text-purple-900 uppercase text-center">Academy Visuals</h3>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                        {/* Nest Background Upload */}
+                        <div className="p-10 bg-indigo-50 rounded-[4rem] border-4 border-white text-center space-y-8">
+                            <span className="text-8xl block">🖼️</span>
+                            <input type="file" id="nest-bg" className="hidden" accept="image/*" onChange={(e) => { const f = e.target.files?.[0]; if (f) { const r = new FileReader(); r.onload = () => { setNestBg(r.result as string); speak("Background magic complete!"); }; r.readAsDataURL(f); } }} />
+                            <label htmlFor="nest-bg" className="block w-full py-10 bg-indigo-900 text-white rounded-[3rem] font-black uppercase cursor-pointer border-4 border-white shadow-2xl text-xl">Upload Nest Background</label>
+                            {nestBg && <button onClick={() => setNestBg(null)} className="text-indigo-400 font-black uppercase text-xs underline">Reset Background</button>}
+                        </div>
+
+                        {/* Mascot Image Upload */}
+                        <div className="p-10 bg-pink-50 rounded-[4rem] border-4 border-white text-center space-y-8">
+                            <span className="text-8xl block">🧜‍♀️</span>
+                            <input type="file" id="mascot-img" className="hidden" accept="image/*" onChange={(e) => { const f = e.target.files?.[0]; if (f) { const r = new FileReader(); r.onload = () => { setMascotImg(r.result as string); speak("Mermaid transformation complete!"); }; r.readAsDataURL(f); } }} />
+                            <label htmlFor="mascot-img" className="block w-full py-10 bg-pink-600 text-white rounded-[3rem] font-black uppercase cursor-pointer border-4 border-white shadow-2xl text-xl">Upload Mermaid Character</label>
+                            {mascotImg && <button onClick={() => setMascotImg(null)} className="text-pink-400 font-black uppercase text-xs underline">Reset to Magic EVA</button>}
+                        </div>
                     </div>
                 </div>
             )}
@@ -478,8 +654,16 @@ export default function App() {
     setIsGenerating(true);
     try {
       const lesson = await gemini.generateLesson(task.title, task.category);
-      setCurrentLesson(lesson);
-    } catch (e) { speak("Try again soon!"); } finally { setIsGenerating(false); }
+      if (lesson) {
+        setCurrentLesson(lesson);
+      } else {
+        speak("Oh! The magic book is a bit stuck. Let's try once more!");
+      }
+    } catch (e) { 
+      speak("Try again soon!"); 
+    } finally { 
+      setIsGenerating(false); 
+    }
   };
 
   const handleTaskComplete = (task: Task, grade: Grade = 'Diamond') => {
@@ -496,11 +680,14 @@ export default function App() {
     if (parentCodeInput === '2806') { 
       setIsParentMode(true); 
       setShowParentLock(false); 
-      setParentCodeInput(''); // Clear passcode immediately
+      setParentCodeInput(''); 
       setActiveTab('parent-admin'); 
       speak("Access granted."); 
     } 
-    else { speak("Wrong magic code!"); setParentCodeInput(''); }
+    else { 
+      speak("Wrong magic code!"); 
+      setParentCodeInput(''); 
+    }
   };
 
   const generatePDFTranscriptOnly = () => {
@@ -529,7 +716,7 @@ export default function App() {
       onParentClick={() => isParentMode ? setIsParentMode(false) : setShowParentLock(true)} 
       onQuitClick={() => window.location.reload()} onGoHome={handleGoHome} 
       isParentMode={isParentMode} stopAllSpeech={stopAllSpeech} speak={speak} 
-      hideNav={activeGame !== 'none' || currentLesson !== null || showMorningCheckIn || activeTab === 'tutor'}
+      hideNav={activeGame !== 'none' || currentLesson !== null || showMorningCheckIn || (activeTab === 'tutor' && isNestActive)}
     >
       {showMorningCheckIn ? <MorningCheckIn onComplete={(r) => { setTotalStars(s => s + r); setShowMorningCheckIn(false); localStorage.setItem('jadzia_last_checkin', new Date().toDateString()); speak("Good morning Jadzia!"); }} speak={speak} /> : 
        activeGame !== 'none' ? (
@@ -537,13 +724,13 @@ export default function App() {
           {activeGame === 'unicorn-counting' && <UnicornGame onComplete={(r, t, e) => { recordGamePerformance('unicorn', r, t, e); setTotalStars(s => s + r); setActiveGame('none'); }} onCancel={() => setActiveGame('none')} speak={speak} parentSound={customGameSounds['unicorn-counting']} />}
           {activeGame === 'memory-match' && <MemoryMatch onComplete={(r, t, e) => { recordGamePerformance('memory', r, t, e); setTotalStars(s => s + r); setActiveGame('none'); }} onCancel={() => setActiveGame('none')} parentSound={customGameSounds['memory-match']} />}
           {activeGame === 'bubble-pop' && <BubblePopGame onComplete={(r, t, e) => { recordGamePerformance('bubble', r, t, e); setTotalStars(s => s + r); setActiveGame('none'); }} onCancel={() => setActiveGame('none')} speak={speak} parentSound={customGameSounds['bubble-pop']} />}
-          {activeGame === 'maze' && <MazeGame onComplete={(r, t, e) => { recordGamePerformance('maze', r, t, e); setTotalStars(s => s + r); setActiveGame('none'); }} onCancel={() => setActiveGame('none')} parentSound={customGameSounds['maze']} />}
+          {activeGame === 'maze' && <MemoryMatch onComplete={(r, t, e) => { recordGamePerformance('maze', r, t, e); setTotalStars(s => s + r); setActiveGame('none'); }} onCancel={() => setActiveGame('none')} parentSound={customGameSounds['maze']} />}
           {activeGame === 'fidget' && <FidgetGame onComplete={(r, t, e) => { recordGamePerformance('fidget', r, t, e); setTotalStars(s => s + r); setActiveGame('none'); }} onCancel={() => setActiveGame('none')} parentSound={customGameSounds['fidget']} />}
           {activeGame === 'new-words' && <NewWordsGame onComplete={(r) => { setTotalStars(s => s + r); setActiveGame('none'); }} onCancel={() => setActiveGame('none')} speak={speak} parentSound={customGameSounds['new-words']} />}
           {activeGame === 'shapes-sides' && <ShapesSidesGame onComplete={(r) => { setTotalStars(s => s + r); setActiveGame('none'); }} onCancel={() => setActiveGame('none')} speak={speak} parentSound={customGameSounds['shapes-sides']} />}
           {activeGame === '3d-explore' && <ThreeDExploreGame onComplete={(r) => { setTotalStars(s => s + r); setActiveGame('none'); }} onCancel={() => setActiveGame('none')} speak={speak} parentSound={customGameSounds['3d-explore']} />}
           {activeGame === 'spell-me' && <SpellMeGame onComplete={(r, t, e) => { recordGamePerformance('spell', r, t, e); setTotalStars(s => s + r); setActiveGame('none'); }} onCancel={() => setActiveGame('none')} speak={speak} parentSound={customGameSounds['spell-me']} />}
-          {activeGame === 'talk-to-friends' && <TalkToFriendsGame onComplete={(r) => { setTotalStars(s => s + r); setActiveGame('none'); }} onCancel={() => setActiveGame('none')} speak={speak} parentSound={customGameSounds['talk-to-friends']} />}
+          {activeGame === 'talk-to-friends' && <TalkToFriendsGame onComplete={(r) => { setTotalStars(s => s + r); setActiveGame('none'); }} onCancel={() => setActiveGame('none')} speak={speak} parentSound={customGameSounds['talk-to-friends']} vocabList={vocabList} vocabAudioMap={vocabAudioMap} />}
           {activeGame === 'art-canvas' && <ArtCanvas onComplete={(r) => { setTotalStars(s => s + r); setActiveGame('none'); }} onCancel={() => setActiveGame('none')} speak={speak} parentSound={customGameSounds['art-canvas']} />}
           {activeGame === 'clock-game' && <ClockGame onComplete={(r, t, e) => { recordGamePerformance('clock', r, t, e); setTotalStars(s => s + r); setActiveGame('none'); }} onCancel={() => setActiveGame('none')} speak={speak} parentSound={customGameSounds['clock-game']} />}
           {activeGame === 'fidget-play' && selectedFidget && <FidgetPlay toy={selectedFidget} onCancel={() => setActiveGame('none')} stopAllSpeech={stopAllSpeech} parentSound={customGameSounds[selectedFidget.id]} />}
@@ -552,7 +739,7 @@ export default function App() {
 
       {showParentLock && (
         <div className="fixed inset-0 z-[20000] bg-[#2e1065]/95 backdrop-blur-xl flex items-center justify-center p-6 animate-pop">
-          <div className="bg-white p-16 rounded-[5rem] w-full max-w-md text-center border-[12px] border-white shadow-2xl">
+          <div className="bg-white p-16 rounded-[5rem] w-full max-md text-center border-[12px] border-white shadow-2xl">
             <h3 className="text-4xl font-black text-[#2e1065] uppercase mb-4">Parent Portal</h3>
             <p className="text-sm font-bold text-gray-400 mb-8 uppercase tracking-widest">Enter code 2806 to unlock</p>
             <input type="password" value={parentCodeInput} onChange={(e) => setParentCodeInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && verifyParentCode()} placeholder="****" className="w-full p-8 bg-purple-50 rounded-[2.5rem] text-center text-5xl font-black outline-none border-4 border-purple-100 mb-10 text-purple-900 shadow-inner" autoFocus />
@@ -565,7 +752,7 @@ export default function App() {
       )}
 
       {isGenerating && <div className="fixed inset-0 bg-black/90 backdrop-blur-3xl z-[9999] flex flex-col items-center justify-center text-center"><div className="animate-spin text-9xl mb-10">🧜‍♀️</div><p className="font-black text-pink-400 uppercase text-6xl">EVA IS CASTING A SPELL...</p></div>}
-      {completedTaskForReward && <LessonRewardModal task={completedTaskForReward} existingAudio={completedTaskForReward.parentFeedback} onClose={() => setCompletedTaskForReward(null)} onSaveAudio={(b) => { setTasks(prev => prev.map(t => t.id === completedTaskForReward.id ? { ...t, parentFeedback: b } : t)); speak("Praise Saved!"); }} speak={speak} stopAllSpeech={stopAllSpeech} />}
+      {completedTaskForReward && <LessonRewardModal task={completedTaskForReward} existingAudio={completedTaskForReward.parentFeedback} onClose={() => setCompletedTaskForReward(null)} onSaveAudio={(b) => { setTasks(prev => prev.map(t => t.id === completedTaskForReward.id ? { ...t, parentFeedback: b } : t)); speak("Praise Saved!"); }} speak={speak} stopAllSpeech={stopAllSpeech} isSpeaking={isSpeaking} mascotImg={mascotImg} />}
     </Layout>
   );
 }

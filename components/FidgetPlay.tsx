@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { FidgetToy } from '../types';
 
@@ -47,7 +46,7 @@ export default function FidgetPlay({ toy, onCancel, parentSound, stopAllSpeech }
     const clickY = e.clientY - rect.top;
 
     if (toy.id === 'f1') {
-      const colors = ['#f472b6', '#60a5fa', '#34d399', '#fbbf24', '#a855f7'];
+      const colors = ['#f472b6', '#60a5fa', '#34d399', '#fbbf24', '#a855f7', '#ffffff', '#22d3ee'];
       const newSplash = { id: Date.now(), x: clickX, y: clickY, color: colors[Math.floor(Math.random() * colors.length)] };
       setSplashes(prev => [...prev, newSplash]);
       setTimeout(() => setSplashes(prev => prev.filter(s => s.id !== newSplash.id)), 1000);
@@ -59,6 +58,7 @@ export default function FidgetPlay({ toy, onCancel, parentSound, stopAllSpeech }
       }
       soundRef.current.play().catch(() => {});
       const newDolphin = { id: Date.now(), left: Math.random() * 80 + 10 };
+      // Fix: Removed incorrect 'd-' typo that caused 'Cannot find name d' error.
       setDolphins(prev => [...prev, newDolphin]);
       setTimeout(() => setDolphins(prev => prev.filter(d => d.id !== newDolphin.id)), 2500);
 
@@ -130,7 +130,7 @@ export default function FidgetPlay({ toy, onCancel, parentSound, stopAllSpeech }
 
       <div 
         onClick={handleInteract}
-        className="w-80 h-80 bg-white rounded-[5rem] border-[15px] border-purple-50 shadow-inner flex items-center justify-center cursor-pointer active:scale-95 transition-all relative overflow-hidden"
+        className={`w-80 h-80 rounded-[5rem] border-[15px] shadow-inner flex items-center justify-center cursor-pointer active:scale-95 transition-all relative overflow-hidden ${toy.id === 'f1' ? 'bg-slate-950 border-slate-800' : 'bg-white border-purple-50'}`}
       >
         <div 
           style={{ 
@@ -166,8 +166,8 @@ export default function FidgetPlay({ toy, onCancel, parentSound, stopAllSpeech }
           )}
           {splashes.map(s => (
             <div key={s.id} className="absolute pointer-events-none" style={{ left: s.x, top: s.y }}>
-              {[...Array(10)].map((_, i) => (
-                <div key={i} className="absolute w-8 h-8 rounded-full animate-firework" style={{ backgroundColor: s.color, transform: `rotate(${i * 36}deg) translateY(-60px)` }} />
+              {[...Array(12)].map((_, i) => (
+                <div key={i} className="absolute w-8 h-8 rounded-full animate-firework" style={{ backgroundColor: s.color, transform: `rotate(${i * 30}deg) translateY(-80px)` }} />
               ))}
             </div>
           ))}

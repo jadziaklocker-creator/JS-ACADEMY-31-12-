@@ -1,5 +1,5 @@
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import Mascot from './Mascot';
 import { Task } from '../types';
 
@@ -10,22 +10,38 @@ interface LessonRewardModalProps {
   onSaveAudio: (base64: string) => void;
   speak: (text: string) => void;
   stopAllSpeech: () => void;
+  isSpeaking: boolean;
+  mascotImg?: string | null;
 }
 
-export default function LessonRewardModal({ task, existingAudio, onClose, onSaveAudio, speak, stopAllSpeech }: LessonRewardModalProps) {
+export default function LessonRewardModal({ task, existingAudio, onClose, onSaveAudio, speak, stopAllSpeech, isSpeaking, mascotImg }: LessonRewardModalProps) {
   const [showPassword, setShowPassword] = useState(false);
   const [passwordInput, setPasswordInput] = useState('');
+  const [isLocalAudioPlaying, setIsLocalAudioPlaying] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const PARENT_PASSWORD = '2806';
 
   const handlePlayReward = () => {
     if (existingAudio) {
       const audio = new Audio(existingAudio);
-      audio.play().catch(e => console.error("Reward audio failed", e));
+      audio.onplay = () => setIsLocalAudioPlaying(true);
+      audio.onended = () => setIsLocalAudioPlaying(false);
+      audio.onerror = () => setIsLocalAudioPlaying(false);
+      audio.play().catch(e => {
+        console.error("Reward audio failed", e);
+        setIsLocalAudioPlaying(false);
+      });
     } else {
-      speak("Wonderful job Jadzia! Parent hasn't recorded a magic message for this one yet, but I think you are amazing!");
+      speak(`Wonderful job Jadzia! You finished ${task.title}! You are a superstar! Parent hasn't recorded a special message yet, but I think you are purely magical!`);
     }
   };
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      handlePlayReward();
+    }, 800);
+    return () => clearTimeout(timer);
+  }, []);
 
   const handleParentAction = () => {
     setShowPassword(true);
@@ -33,7 +49,6 @@ export default function LessonRewardModal({ task, existingAudio, onClose, onSave
   };
 
   const verifyPassword = () => {
-    // Fixed: Change parentCodeInput to passwordInput which is defined in state
     if (passwordInput === PARENT_PASSWORD) {
       setShowPassword(false);
       fileInputRef.current?.click();
@@ -48,6 +63,10 @@ export default function LessonRewardModal({ task, existingAudio, onClose, onSave
       const reader = new FileReader();
       reader.onloadend = () => {
         onSaveAudio(reader.result as string);
+        speak("Magic clip saved! Playing it for you now.");
+        setTimeout(() => {
+          handlePlayReward();
+        }, 1500);
       };
       reader.readAsDataURL(file);
     }
@@ -104,22 +123,22 @@ export default function LessonRewardModal({ task, existingAudio, onClose, onSave
 
       <div className="relative z-10 w-full max-w-2xl flex flex-col items-center gap-10">
         <div className="text-center">
-          <h2 className="text-white font-black text-5xl md:text-6xl uppercase tracking-tighter mb-2 drop-shadow-lg">Lesson Complete!</h2>
+          <h2 className="text-white font-black text-5xl md:text-6xl uppercase tracking-tighter mb-2 drop-shadow-lg animate-bounce">Lesson Complete! 💎</h2>
           <p className="text-pink-300 font-black text-xl uppercase tracking-[0.3em]">{task.title}</p>
         </div>
 
         <div className="relative group">
-          <div className="absolute inset-0 bg-white/20 rounded-full blur-[80px] animate-pulse group-hover:bg-cyan-400/30 transition-all"></div>
-          <Mascot isSpeaking={false} className="scale-110 drop-shadow-[0_0_50px_rgba(255,255,255,0.4)]" />
+          <div className={`absolute inset-0 bg-white/20 rounded-full blur-[80px] transition-all duration-1000 ${(isSpeaking || isLocalAudioPlaying) ? 'bg-cyan-400/40 scale-125' : 'bg-white/10'}`}></div>
+          <Mascot isSpeaking={isSpeaking || isLocalAudioPlaying} className="scale-110 drop-shadow-[0_0_50px_rgba(255,255,255,0.4)]" customImage={mascotImg} />
         </div>
 
         <div className="w-full space-y-6">
           <button 
             onClick={handlePlayReward}
-            className="w-full py-10 bg-gradient-to-r from-cyan-400 via-blue-500 to-indigo-600 text-white rounded-[3rem] font-black text-3xl shadow-[0_20px_0_rgba(0,0,0,0.3)] border-[10px] border-white active:translate-y-4 active:shadow-none transition-all flex items-center justify-center gap-6"
+            className={`w-full py-10 rounded-[3rem] font-black text-3xl shadow-[0_20px_0_rgba(0,0,0,0.3)] border-[10px] border-white active:translate-y-4 active:shadow-none transition-all flex items-center justify-center gap-6 ${(isSpeaking || isLocalAudioPlaying) ? 'bg-gradient-to-r from-cyan-400 to-blue-500 animate-pulse' : 'bg-gradient-to-r from-cyan-400 via-blue-500 to-indigo-600'} text-white`}
           >
-            <span className="text-6xl">🎁</span>
-            <span>PLAY MY MAGIC REWARD!</span>
+            <span className="text-6xl">{(isSpeaking || isLocalAudioPlaying) ? '🔊' : '🎁'}</span>
+            <span>{(isSpeaking || isLocalAudioPlaying) ? 'PLAYING REWARD...' : 'REPLAY MAGIC REWARD'}</span>
           </button>
 
           <div className="flex gap-4">
@@ -127,13 +146,13 @@ export default function LessonRewardModal({ task, existingAudio, onClose, onSave
               onClick={handleParentAction}
               className="flex-1 py-6 bg-white/10 backdrop-blur-md text-white/70 rounded-[2rem] font-black uppercase text-sm border-4 border-white/20 hover:bg-white/20 transition-all"
             >
-              🔒 Parent Access
+              🔒 Parent Upload
             </button>
             <button 
-              onClick={onClose}
+              onClick={() => { stopAllSpeech(); onClose(); }}
               className="flex-1 py-6 bg-emerald-600 text-white rounded-[2rem] font-black uppercase text-xl border-4 border-white shadow-lg active:scale-95 transition-all"
             >
-              Back to School 🗺️
+              Next Adventure ➡️
             </button>
           </div>
         </div>

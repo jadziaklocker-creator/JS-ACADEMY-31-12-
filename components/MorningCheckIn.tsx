@@ -4,7 +4,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 const WEATHER_OPTIONS = [
   { id: 'sunny', emoji: '☀️', label: 'Sunny' },
   { id: 'cloudy', emoji: '☁️', label: 'Cloudy' },
-  { id: 'rainy', emoji: 'Rainy', label: 'Rainy' },
+  { id: 'rainy', emoji: '🌧️', label: 'Rainy' },
   { id: 'cold', emoji: '❄️', label: 'Cold' },
   { id: 'windy', emoji: '💨', label: 'Windy' },
 ];
