@@ -1,0 +1,7 @@
+{
+  "name": "Jadzia's Magic Academy",
+  "description": "A magical, personalized educational app for Jadzia, featuring EVA the assistant, unicorns, butterflies, and SA curriculum fun.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}
