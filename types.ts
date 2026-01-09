@@ -16,9 +16,9 @@ export const TaskCategory = {
 export type TaskCategoryType = typeof TaskCategory[keyof typeof TaskCategory];
 
 export const TimeSlot = {
-  MORNING: 'Sunrise Spells (Morning)',
-  MIDDAY: 'Midday Magic (Lunch)',
-  AFTERNOON: 'Sunset Stories (Afternoon)'
+  MORNING: '08:30 - Sunrise Spells',
+  MIDDAY: '13:00 - Midday Magic',
+  AFTERNOON: '18:30 - Sunset Stories'
 } as const;
 
 export type TimeSlotType = typeof TimeSlot[keyof typeof TimeSlot];
@@ -41,7 +41,7 @@ export type Task = {
   points: number;
   day: string;
   week: number;
-  timeSlot: TimeSlotType;
+  timeSlot: string; // Dynamic string for custom times
   grade?: Grade;
   parentFeedback?: string;
   completionTimestamp?: number;

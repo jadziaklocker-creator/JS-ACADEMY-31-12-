@@ -5,7 +5,8 @@ const SYSTEM_INSTRUCTION = `You are EVA, a magical, bubbly guide for 5-year-old 
 Persona: Friendly, articulate female voice (similar to Microsoft Zira style).
 Language: ALWAYS use South African English (colour, maths). 
 Lingo: Enthusiastic and encouraging ("Awesome", "Terrific").
-Spelling: South African.`;
+Spelling: South African.
+Faith: Jadzia is a born-again believer. Use terminology like "Wonderful", "Academy", "Surprise". Avoid "Spells" or "Casting".`;
 
 async function callWithRetry(fn: () => Promise<any>, maxRetries = 2): Promise<any> {
   let lastError: any;
@@ -47,7 +48,7 @@ export const gemini = {
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
-        contents: `Magical 5-year-old lesson: "${subject}" (${category}). 3 steps, 1 challenge. South African spelling. Use large emojis for visualHint.`,
+        contents: `Academy lesson for 5yo: "${subject}" (${category}). 3 steps, 1 challenge. South African spelling. Use emojis.`,
         config: {
           responseMimeType: "application/json",
           responseSchema: {
@@ -91,7 +92,7 @@ export const gemini = {
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
-        contents: `Task from prompt: "${prompt}".`,
+        contents: `Task from prompt: "${prompt}". Assign a South African CAPS category and points. Use 100 points as default. Set timeSlot to 08:30.`,
         config: {
           responseMimeType: "application/json",
           responseSchema: {
@@ -104,7 +105,7 @@ export const gemini = {
             },
             required: ["title", "category", "points", "timeSlot"]
           },
-          systemInstruction: "You are Mermaid EVA. Output a lesson task object for a 5-year-old in South Africa.",
+          systemInstruction: "You are Mermaid EVA. Output a task object for a 5-year-old.",
           thinkingConfig: { thinkingBudget: 0 }
         }
       });
@@ -112,12 +113,17 @@ export const gemini = {
     });
   },
 
-  async generateWeeklyCurriculum() {
+  async generateWeeklyCurriculum(alreadyCompleted: string[] = []) {
     return callWithRetry(async () => {
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const response = await ai.models.generateContent({
         model: 'gemini-3-pro-preview',
-        contents: "Full week Grade R/1 CAPS curriculum (Mon-Fri). 9 lessons/day. Literacy, Numeracy, Life Skills, Afrikaans, isiZulu, Bible Study. South African spelling.",
+        contents: `Full week Grade R/1 CAPS curriculum (Mon-Fri). 
+        CRITICAL RULES:
+        1. EXACTLY 3 tasks per day at: 08:30, 13:00, 18:30.
+        2. EXCLUDE these completed topics: ${alreadyCompleted.join(', ')}.
+        3. Subjects: Literacy, Numeracy, Life Skills, Afrikaans, isiZulu, Bible Study. 
+        4. South African terminology.`,
         config: {
           responseMimeType: "application/json",
           responseSchema: {
@@ -134,7 +140,7 @@ export const gemini = {
               required: ["day", "title", "category", "points", "timeSlot"]
             }
           },
-          systemInstruction: "Expert South African Foundation educator.",
+          systemInstruction: "Expert South African Foundation educator. Build non-repetitive schedules.",
           thinkingConfig: { thinkingBudget: 32768 }
         }
       });
@@ -163,37 +169,12 @@ export const gemini = {
     });
   },
 
-  async generateSingleWord(excludeWords: string[]) {
-    return callWithRetry(async () => {
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-      const response = await ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
-        contents: `One word for 5-year-old. Exclude: ${excludeWords.join(', ')}`,
-        config: {
-          responseMimeType: "application/json",
-          responseSchema: {
-            type: Type.OBJECT,
-            properties: {
-              word: { type: Type.STRING },
-              emoji: { type: Type.STRING },
-              definition: { type: Type.STRING },
-              category: { type: Type.STRING }
-            },
-            required: ["word", "emoji", "definition", "category"]
-          },
-          thinkingConfig: { thinkingBudget: 0 }
-        }
-      });
-      return JSON.parse(response.text);
-    });
-  },
-
   async generateVocabWord(excludeWords: string[]) {
     return callWithRetry(async () => {
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
-        contents: `One Afrikaans/isiZulu word. Exclude: ${excludeWords.join(', ')}`,
+        contents: `One Afrikaans/isiZulu word for a 5-year-old. Exclude: ${excludeWords.join(', ')}`,
         config: {
           responseMimeType: "application/json",
           responseSchema: {
@@ -207,7 +188,33 @@ export const gemini = {
             },
             required: ["target", "english", "lang", "icon", "color"]
           },
-          systemInstruction: "Joyful South African language learning.",
+          systemInstruction: "Joyful language learning helper.",
+          thinkingConfig: { thinkingBudget: 0 }
+        }
+      });
+      return JSON.parse(response.text);
+    });
+  },
+
+  async generateSingleWord(excludeWords: string[]) {
+    return callWithRetry(async () => {
+      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      const response = await ai.models.generateContent({
+        model: 'gemini-3-flash-preview',
+        contents: `One English word for a 5-year-old. Exclude: ${excludeWords.join(', ')}`,
+        config: {
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              word: { type: Type.STRING },
+              emoji: { type: Type.STRING },
+              definition: { type: Type.STRING },
+              category: { type: Type.STRING }
+            },
+            required: ["word", "emoji", "definition", "category"]
+          },
+          systemInstruction: "You are EVA. Provide a fun word with SA spelling.",
           thinkingConfig: { thinkingBudget: 0 }
         }
       });

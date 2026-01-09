@@ -35,8 +35,6 @@ const BIBLE_VERSES = [
 
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
 const HOME_ADDRESS = "26 Oak Hill";
-
-// Latitude/Longitude for Mooikloof, Pretoria East
 const MOOIKLOOF_COORDS = { lat: -25.827, lon: 28.324 };
 
 export const MorningCheckIn = ({ onComplete, speak }: { onComplete: (reward: number, data: any) => void, speak: (t: string) => void }) => {
@@ -51,25 +49,20 @@ export const MorningCheckIn = ({ onComplete, speak }: { onComplete: (reward: num
   const todayStr = useMemo(() => new Date().toLocaleDateString('en-US', { weekday: 'long' }), []);
   const dailyVerse = useMemo(() => BIBLE_VERSES[Math.floor(Math.random() * BIBLE_VERSES.length)], []);
 
-  // Fetch real weather for Mooikloof
   useEffect(() => {
     const fetchWeather = async () => {
       try {
         const res = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${MOOIKLOOF_COORDS.lat}&longitude=${MOOIKLOOF_COORDS.lon}&current_weather=true`);
         const data = await res.json();
         const code = data.current_weather.weathercode;
-        
-        // Map WMO codes to our labels
         let weatherLabel = 'Sunny';
         if (code >= 1 && code <= 3) weatherLabel = 'Cloudy';
         if (code >= 51 && code <= 99) weatherLabel = 'Rainy';
         if (code >= 71 && code <= 77) weatherLabel = 'Cold';
         if (data.current_weather.windspeed > 25) weatherLabel = 'Windy';
-        
         setActualWeather(weatherLabel);
       } catch (e) {
-        console.error("Weather fetch failed", e);
-        setActualWeather('Sunny'); // Fallback
+        setActualWeather('Sunny');
       } finally {
         setIsWeatherLoading(false);
       }
@@ -94,20 +87,16 @@ export const MorningCheckIn = ({ onComplete, speak }: { onComplete: (reward: num
   }, [step, questions, speak]);
 
   const handleNext = () => {
-    if (step === 2) {
-      if (selectedDay !== todayStr) {
-        speak(`Wait! Is today really ${selectedDay}? Look at the magic calendar... I think it is ${todayStr}! Try again, Jadzia!`);
-        return;
-      }
+    if (step === 2 && selectedDay !== todayStr) {
+      speak(`Hmm, look at the calendar Jadzia! My magic tells me it is ${todayStr}, but let's continue with your day!`);
     }
-
     if (step === 3) {
       if (selectedWeather !== actualWeather) {
-        speak(`Oh! Look out the window at Mooikloof! Is it really ${selectedWeather}? I think the sky looks more ${actualWeather} right now!`);
-        return;
+        speak(`My magic sensors at Mooikloof say it's a bit ${actualWeather}, but you can see better than I can! Let's say it's ${selectedWeather}!`);
+      } else {
+        speak(`I agree! A wonderful ${selectedWeather} day!`);
       }
     }
-
     if (step === 4) {
       onComplete(35, { 
         day: selectedDay, 
@@ -129,10 +118,7 @@ export const MorningCheckIn = ({ onComplete, speak }: { onComplete: (reward: num
 
   return (
     <div className="bg-white rounded-[4rem] p-10 border-[12px] border-pink-50 shadow-2xl animate-pop mb-10 text-center">
-      <button 
-        onClick={() => speak(currentQuestion)}
-        className="w-full mb-8 p-8 bg-pink-50 rounded-[3rem] border-4 border-white shadow-xl active:scale-95 transition-all group hover:bg-pink-100"
-      >
+      <button onClick={() => speak(currentQuestion)} className="w-full mb-8 p-8 bg-pink-50 rounded-[3rem] border-4 border-white shadow-xl active:scale-95 transition-all group hover:bg-pink-100">
         <h3 className="text-2xl md:text-3xl font-black text-pink-600 uppercase flex items-center justify-center gap-3 leading-tight">
           <span>{step === 1 ? "Sword of the Spirit" : currentQuestion}</span>
           <span className="text-2xl group-hover:scale-125 transition-all">🔊</span>
@@ -164,11 +150,7 @@ export const MorningCheckIn = ({ onComplete, speak }: { onComplete: (reward: num
       {step === 2 && (
         <div className="grid grid-cols-2 gap-4">
           {DAYS.map(day => (
-            <button 
-              key={day} 
-              onClick={() => { setSelectedDay(day); speak(day); }} 
-              className={`p-8 rounded-[2.5rem] font-black border-4 transition-all text-xl ${selectedDay === day ? 'bg-pink-600 text-white border-white scale-105 shadow-2xl' : 'bg-white text-pink-300 border-pink-50 hover:border-pink-200'}`}
-            >
+            <button key={day} onClick={() => { setSelectedDay(day); speak(day); }} className={`p-8 rounded-[2.5rem] font-black border-4 transition-all text-xl ${selectedDay === day ? 'bg-pink-600 text-white border-white scale-105 shadow-2xl' : 'bg-white text-pink-300 border-pink-50 hover:border-pink-200'}`}>
               {day}
             </button>
           ))}
@@ -177,14 +159,8 @@ export const MorningCheckIn = ({ onComplete, speak }: { onComplete: (reward: num
 
       {step === 3 && (
         <div className="flex flex-wrap justify-center gap-6">
-          {isWeatherLoading ? (
-             <div className="animate-pulse text-blue-300 font-black uppercase">Checking Mooikloof Sky...</div>
-          ) : WEATHER_OPTIONS.map(w => (
-            <button 
-              key={w.id} 
-              onClick={() => { setSelectedWeather(w.label); speak(w.label); }} 
-              className={`w-32 h-32 flex flex-col items-center justify-center rounded-[2.5rem] border-4 transition-all ${selectedWeather === w.label ? 'bg-blue-400 text-white border-white scale-110 shadow-2xl' : 'bg-white text-blue-200 border-blue-50 hover:border-blue-100'}`}
-            >
+          {WEATHER_OPTIONS.map(w => (
+            <button key={w.id} onClick={() => { setSelectedWeather(w.label); speak(w.label); }} className={`w-32 h-32 flex flex-col items-center justify-center rounded-[2.5rem] border-4 transition-all ${selectedWeather === w.label ? 'bg-blue-400 text-white border-white scale-110 shadow-2xl' : 'bg-white text-blue-200 border-blue-50 hover:border-blue-100'}`}>
               <span className="text-6xl">{w.emoji}</span>
               <span className="text-[10px] font-black uppercase mt-2">{w.label}</span>
             </button>
@@ -195,11 +171,7 @@ export const MorningCheckIn = ({ onComplete, speak }: { onComplete: (reward: num
       {step === 4 && (
         <div className="flex flex-wrap justify-center gap-4">
           {EMOTION_OPTIONS.map(e => (
-            <button 
-              key={e.id} 
-              onClick={() => handleEmotionSelect(e)} 
-              className={`w-28 h-36 flex flex-col items-center justify-center rounded-[2.5rem] border-4 transition-all ${selectedEmotion?.id === e.id ? 'bg-fuchsia-500 text-white border-white scale-110 shadow-2xl' : 'bg-white text-fuchsia-300 border-fuchsia-50 hover:border-fuchsia-100'}`}
-            >
+            <button key={e.id} onClick={() => handleEmotionSelect(e)} className={`w-28 h-36 flex flex-col items-center justify-center rounded-[2.5rem] border-4 transition-all ${selectedEmotion?.id === e.id ? 'bg-fuchsia-500 text-white border-white scale-110 shadow-2xl' : 'bg-white text-fuchsia-300 border-fuchsia-50 hover:border-fuchsia-100'}`}>
               <span className="text-6xl">{e.emoji}</span>
               <span className="text-[10px] font-black uppercase mt-2">{e.label}</span>
             </button>
@@ -214,7 +186,7 @@ export const MorningCheckIn = ({ onComplete, speak }: { onComplete: (reward: num
 
       <button
         onClick={handleNext}
-        disabled={(step === 2 && !selectedDay) || (step === 3 && (!selectedWeather || isWeatherLoading)) || (step === 4 && !selectedEmotion)}
+        disabled={(step === 2 && !selectedDay) || (step === 3 && !selectedWeather) || (step === 4 && !selectedEmotion)}
         className="w-full mt-10 py-8 bg-[#10b981] text-white rounded-[3rem] font-black text-2xl shadow-xl disabled:opacity-50 active:scale-95 transition-transform uppercase border-4 border-white"
       >
         {step === 4 ? "Let's Start Our Magic Day! ✨" : "Check and Continue ➡️"}
