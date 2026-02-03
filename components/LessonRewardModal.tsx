@@ -12,9 +12,10 @@ interface LessonRewardModalProps {
   stopAllSpeech: () => void;
   isSpeaking: boolean;
   mascotImg?: string | null;
+  childName: string;
 }
 
-export default function LessonRewardModal({ task, existingAudio, onClose, onSaveAudio, speak, stopAllSpeech, isSpeaking, mascotImg }: LessonRewardModalProps) {
+export default function LessonRewardModal({ task, existingAudio, onClose, onSaveAudio, speak, stopAllSpeech, isSpeaking, mascotImg, childName }: LessonRewardModalProps) {
   const [showPassword, setShowPassword] = useState(false);
   const [passwordInput, setPasswordInput] = useState('');
   const [isLocalAudioPlaying, setIsLocalAudioPlaying] = useState(false);
@@ -32,7 +33,7 @@ export default function LessonRewardModal({ task, existingAudio, onClose, onSave
         setIsLocalAudioPlaying(false);
       });
     } else {
-      speak(`Wonderful job Jadzia! You finished ${task.title}! You are a superstar! Parent hasn't recorded a special message yet, but I think you are purely magical!`);
+      speak(`Wonderful job ${childName}! You finished ${task.title}! You are a superstar! Parent hasn't recorded a special message yet, but I think you are purely magical!`);
     }
   };
 

@@ -13,10 +13,11 @@ interface LayoutProps {
   stopAllSpeech: () => void;
   speak: (t: string) => void;
   hideNav?: boolean;
+  childName: string;
 }
 
 const Layout: React.FC<LayoutProps> = (props) => {
-  const { children, activeTab, setActiveTab, totalStars, onParentClick, onQuitClick, onGoHome, isParentMode, stopAllSpeech, speak, hideNav } = props;
+  const { children, activeTab, setActiveTab, totalStars, onParentClick, onQuitClick, onGoHome, isParentMode, stopAllSpeech, speak, hideNav, childName } = props;
   const [currentTime, setCurrentTime] = useState(new Date());
 
   useEffect(() => {
@@ -68,7 +69,7 @@ const Layout: React.FC<LayoutProps> = (props) => {
           <div className="flex items-center gap-3">
             <button onClick={onQuitClick} className="w-10 h-10 bg-black/20 rounded-full flex items-center justify-center text-sm balloon-button border-2 border-white/20">❌</button>
             <div onClick={() => speakSystem(`The date is ${dateStr}, and it is ${timeStr}`)} className="cursor-pointer hover:scale-105 active:scale-95 transition-all">
-              <h1 className="text-2xl font-black tracking-tighter uppercase drop-shadow-lg leading-none">Jadzia's Academy</h1>
+              <h1 className="text-2xl font-black tracking-tighter uppercase drop-shadow-lg leading-none">{childName}'s Academy</h1>
               <p className="text-[12px] font-black opacity-100 uppercase tracking-widest mt-1 bg-white/20 px-3 py-1 rounded-full border-2 border-white/30 shadow-inner inline-block">
                 {dateStr} • {timeStr}
               </p>
@@ -84,7 +85,7 @@ const Layout: React.FC<LayoutProps> = (props) => {
             <button onClick={onParentClick} className={`w-12 h-12 rounded-full flex items-center justify-center text-xl balloon-button border-4 transition-all duration-500 ${isParentMode ? 'bg-yellow-400 border-yellow-200 animate-pulse scale-110' : 'bg-white/20 border-white/20'}`}>
                 {isParentMode ? '🔓' : '🔒'}
             </button>
-            <button onClick={() => speakSystem(`Jadzia, your current balance is ${totalStars} Rand`)} className="bg-[#10b981] text-white px-6 py-2 rounded-full font-black text-xl shadow-[0_5px_0_#059669] border-4 border-white/40 flex items-center gap-2 active:scale-95 transition-all">
+            <button onClick={() => speakSystem(`${childName}, your current balance is ${totalStars} Rand`)} className="bg-[#10b981] text-white px-6 py-2 rounded-full font-black text-xl shadow-[0_5px_0_#059669] border-4 border-white/40 flex items-center gap-2 active:scale-95 transition-all">
               💰 <span>{totalStars} Rand</span>
             </button>
           </div>

@@ -21,7 +21,7 @@ const STAMPS = [
   { emoji: '✨', label: 'Magic' },
 ];
 
-export default function ArtCanvas({ onComplete, onCancel, speak, parentSound }: { onComplete: (r: number) => void, onCancel: () => void, speak: (t: string) => void, parentSound?: string }) {
+export default function ArtCanvas({ onComplete, onCancel, speak, parentSound, childName }: { onComplete: (r: number) => void, onCancel: () => void, speak: (t: string) => void, parentSound?: string, childName: string }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [isDrawing, setIsDrawing] = useState(false);
   const [color, setColor] = useState('#ec4899');
@@ -186,7 +186,7 @@ export default function ArtCanvas({ onComplete, onCancel, speak, parentSound }: 
             onTouchEnd={stopDrawing}
             className="w-full h-full cursor-crosshair touch-none"
           />
-          <div className="absolute top-6 left-6 text-rose-200 pointer-events-none opacity-40 uppercase font-black text-xs tracking-widest">Jadzia's Magic Masterpiece</div>
+          <div className="absolute top-6 left-6 text-rose-200 pointer-events-none opacity-40 uppercase font-black text-xs tracking-widest">{childName}'s Magic Masterpiece</div>
         </div>
       </div>
     </div>

@@ -17,9 +17,10 @@ interface TalkToFriendsProps {
   parentSound?: string;
   vocabList: VocabItem[];
   vocabAudioMap: Record<string, string>;
+  childName: string;
 }
 
-export default function TalkToFriendsGame({ onComplete, onCancel, speak, parentSound, vocabList, vocabAudioMap }: TalkToFriendsProps) {
+export default function TalkToFriendsGame({ onComplete, onCancel, speak, parentSound, vocabList, vocabAudioMap, childName }: TalkToFriendsProps) {
   const [selected, setSelected] = useState<VocabItem | null>(null);
   const [isAdminMode, setIsAdminMode] = useState(false);
   const [showPassword, setShowPassword] = useState(false);

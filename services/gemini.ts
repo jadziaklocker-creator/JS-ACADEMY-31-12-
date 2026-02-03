@@ -1,12 +1,13 @@
 
 import { GoogleGenAI, Type, Modality } from "@google/genai";
 
-const SYSTEM_INSTRUCTION = `You are EVA, a magical, bubbly guide for 5-year-old Jadzia.
+const SYSTEM_INSTRUCTION = (name: string, grade: string) => `You are EVA, a magical, bubbly guide for 5-year-old ${name}.
+Current School Grade: ${grade} (South African Curriculum - CAPS).
 Persona: Friendly, articulate female voice (similar to Microsoft Zira style).
 Language: ALWAYS use South African English (colour, maths). 
 Lingo: Enthusiastic and encouraging ("Awesome", "Terrific").
 Spelling: South African.
-Faith: Jadzia is a born-again believer. Use terminology like "Wonderful", "Academy", "Surprise". Avoid "Spells" or "Casting".`;
+Faith: ${name} is a born-again believer. Use terminology like "Wonderful", "Academy", "Surprise". Avoid "Spells" or "Casting".`;
 
 async function callWithRetry(fn: () => Promise<any>, maxRetries = 2): Promise<any> {
   let lastError: any;
@@ -27,14 +28,14 @@ async function callWithRetry(fn: () => Promise<any>, maxRetries = 2): Promise<an
 }
 
 export const gemini = {
-  async getChatResponse(message: string, context?: string) {
+  async getChatResponse(message: string, childName: string, grade: string, context?: string) {
     return callWithRetry(async () => {
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
-        contents: context ? `Context: ${context}\nJadzia says: ${message}` : message,
+        contents: context ? `Context: ${context}\n${childName} says: ${message}` : message,
         config: { 
-          systemInstruction: SYSTEM_INSTRUCTION,
+          systemInstruction: SYSTEM_INSTRUCTION(childName, grade),
           temperature: 0.7,
           thinkingConfig: { thinkingBudget: 0 }
         }
@@ -43,12 +44,12 @@ export const gemini = {
     });
   },
 
-  async generateLesson(subject: string, category: string) {
+  async generateLesson(subject: string, category: string, childName: string, grade: string) {
     return callWithRetry(async () => {
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
-        contents: `Academy lesson for 5yo: "${subject}" (${category}). 3 steps, 1 challenge. South African spelling. Use emojis.`,
+        contents: `Academy lesson for 5yo ${childName} in ${grade}: "${subject}" (${category}). 3 steps, 1 challenge. Ensure it aligns with SA CAPS standards for ${grade}. Use emojis. For visualHints, use short text or single emojis that describe the concept visually.`,
         config: {
           responseMimeType: "application/json",
           responseSchema: {
@@ -79,7 +80,7 @@ export const gemini = {
             },
             required: ["subject", "parts", "bigGirlChallenge"]
           },
-          systemInstruction: "You are Mermaid EVA. Brief, joyful lessons for a 5-year-old in South Africa.",
+          systemInstruction: `You are Mermaid EVA. Brief, joyful lessons for ${childName} (${grade}) in South Africa.`,
           thinkingConfig: { thinkingBudget: 0 }
         }
       });
@@ -87,12 +88,12 @@ export const gemini = {
     });
   },
 
-  async generateLessonFromPrompt(prompt: string) {
+  async generateLessonFromPrompt(prompt: string, childName: string, grade: string) {
     return callWithRetry(async () => {
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
-        contents: `Task from prompt: "${prompt}". Assign a South African CAPS category and points. Use 100 points as default. Set timeSlot to 08:30.`,
+        contents: `Task for ${childName} (${grade}) from prompt: "${prompt}". Assign a South African CAPS category and points. Defaults: 100 points, timeSlot 08:30.`,
         config: {
           responseMimeType: "application/json",
           responseSchema: {
@@ -105,7 +106,7 @@ export const gemini = {
             },
             required: ["title", "category", "points", "timeSlot"]
           },
-          systemInstruction: "You are Mermaid EVA. Output a task object for a 5-year-old.",
+          systemInstruction: `You are Mermaid EVA. Output a CAPS-aligned task for ${childName} (${grade}).`,
           thinkingConfig: { thinkingBudget: 0 }
         }
       });
@@ -113,17 +114,62 @@ export const gemini = {
     });
   },
 
-  async generateWeeklyCurriculum(alreadyCompleted: string[] = []) {
+  async generateDailyCurriculum(day: string, history: string[] = [], childName: string, grade: string, reportContext: string = "") {
+    return callWithRetry(async () => {
+      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      const response = await ai.models.generateContent({
+        model: 'gemini-3-flash-preview',
+        contents: `Create EXACTLY 7 tasks for ${day} for ${childName} (5yo, ${grade}).
+        
+        KNOWLEDGE FROM PREVIOUS REPORTS: ${reportContext}
+        
+        CRITICAL NOVELTY RULE: Do NOT repeat anything from: [${history.join(', ')}].
+        
+        MANDATORY TASKS:
+        1. Word of the Day (Advanced vocabulary focus)
+        2. Letter of the Day (Phonics focus)
+        3. Number of the Day (Counting/Maths focus)
+        PLUS 4 more tasks from South African CAPS Foundation Phase standards for ${grade}.
+        DISTRIBUTE TIMES across the day.`,
+        config: {
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: Type.ARRAY,
+            items: {
+              type: Type.OBJECT,
+              properties: {
+                title: { type: Type.STRING },
+                category: { type: Type.STRING },
+                points: { type: Type.NUMBER },
+                timeSlot: { type: Type.STRING }
+              },
+              required: ["title", "category", "points", "timeSlot"]
+            }
+          },
+          systemInstruction: `Expert South African Foundation Phase educator for ${grade}. Never repeat yourself. Use the provided growth reports to identify weak areas or mastered concepts.`,
+          thinkingConfig: { thinkingBudget: 0 }
+        }
+      });
+      return JSON.parse(response.text);
+    });
+  },
+
+  async generateWeeklyCurriculum(history: string[] = [], childName: string, grade: string, reportContext: string = "") {
     return callWithRetry(async () => {
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const response = await ai.models.generateContent({
         model: 'gemini-3-pro-preview',
-        contents: `Full week Grade R/1 CAPS curriculum (Mon-Fri). 
-        CRITICAL RULES:
-        1. EXACTLY 3 tasks per day at: 08:30, 13:00, 18:30.
-        2. EXCLUDE these completed topics: ${alreadyCompleted.join(', ')}.
+        contents: `Full week South African CAPS curriculum (Mon-Fri) for ${childName} (${grade}). 
+        
+        KNOWLEDGE FROM PREVIOUS REPORTS: ${reportContext}
+        
+        CRITICAL NOVELTY RULE: Do NOT repeat anything from: [${history.join(', ')}].
+        
+        RULES:
+        1. EXACTLY 3 tasks per day.
+        2. Content must align with ${grade} South African standards.
         3. Subjects: Literacy, Numeracy, Life Skills, Afrikaans, isiZulu, Bible Study. 
-        4. South African terminology.`,
+        4. Use South African terminology.`,
         config: {
           responseMimeType: "application/json",
           responseSchema: {
@@ -140,7 +186,7 @@ export const gemini = {
               required: ["day", "title", "category", "points", "timeSlot"]
             }
           },
-          systemInstruction: "Expert South African Foundation educator. Build non-repetitive schedules.",
+          systemInstruction: `Expert South African Foundation Phase educator. Use the Growth Report context to plan for ${grade} effectively.`,
           thinkingConfig: { thinkingBudget: 32768 }
         }
       });

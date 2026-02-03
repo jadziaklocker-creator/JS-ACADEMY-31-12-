@@ -9,12 +9,12 @@ const WEATHER_OPTIONS = [
   { id: 'windy', emoji: '💨', label: 'Windy' },
 ];
 
-const EMOTION_OPTIONS = [
+const EMOTION_OPTIONS = (name: string) => [
   { id: 'happy', emoji: '😊', label: 'Happy', verse: "God loves to see your happy face! He gives us many good things to enjoy." },
   { id: 'excited', emoji: '🤩', label: 'Excited', verse: "Wow! Your heart is dancing! God has something wonderful planned for you today." },
   { id: 'angry', emoji: '😡', label: 'Angry', verse: "It's okay to feel cross, but remember to take a big breath. God will help you feel calm again." },
   { id: 'frustrated', emoji: '😤', label: 'Frustrated', verse: "When things are tricky, don't worry! Just try again. God is your helper." },
-  { id: 'lonely', emoji: '😔', label: 'Lonely', verse: "You are never ever alone. God is always, always right there with you, Jadzia." },
+  { id: 'lonely', emoji: '😔', label: 'Lonely', verse: `You are never ever alone. God is always, always right there with you, ${name}.` },
   { id: 'bored', emoji: '😐', label: 'Bored', verse: "Let's find some magic! God made a world full of secrets for us to discover." },
   { id: 'brave', emoji: '🦁', label: 'Brave', verse: "You are strong because God is holding your hand today!" },
   { id: 'sad', emoji: '😢', label: 'Sad', verse: "It's okay to cry. God is right next to you, hugging your heart." },
@@ -34,10 +34,9 @@ const BIBLE_VERSES = [
 ];
 
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
-const HOME_ADDRESS = "26 Oak Hill";
 const MOOIKLOOF_COORDS = { lat: -25.827, lon: 28.324 };
 
-export const MorningCheckIn = ({ onComplete, speak }: { onComplete: (reward: number, data: any) => void, speak: (t: string) => void }) => {
+export const MorningCheckIn = ({ onComplete, speak, childName, homeAddress }: { onComplete: (reward: number, data: any) => void, speak: (t: string) => void, childName: string, homeAddress: string }) => {
   const [selectedWeather, setSelectedWeather] = useState<string | null>(null);
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
   const [selectedEmotion, setSelectedEmotion] = useState<any>(null);
@@ -71,9 +70,9 @@ export const MorningCheckIn = ({ onComplete, speak }: { onComplete: (reward: num
   }, []);
 
   const questions: Record<number, string> = {
-    0: `Safety Step! Do you remember where we live? We live at ${HOME_ADDRESS}!`,
+    0: `Safety Step! Do you remember where we live? We live at ${homeAddress}!`,
     1: `Time for our Sword of the Spirit! Listen to today's magic verse from the Bible: ${dailyVerse.text} ${dailyVerse.ref}`,
-    2: "What day is it, Jadzia?",
+    2: `What day is it, ${childName}?`,
     3: "How is the weather today in Mooikloof?",
     4: "How does your heart feel?"
   };
@@ -88,7 +87,7 @@ export const MorningCheckIn = ({ onComplete, speak }: { onComplete: (reward: num
 
   const handleNext = () => {
     if (step === 2 && selectedDay !== todayStr) {
-      speak(`Hmm, look at the calendar Jadzia! My magic tells me it is ${todayStr}, but let's continue with your day!`);
+      speak(`Hmm, look at the calendar ${childName}! My magic tells me it is ${todayStr}, but let's continue with your day!`);
     }
     if (step === 3) {
       if (selectedWeather !== actualWeather) {
@@ -111,7 +110,7 @@ export const MorningCheckIn = ({ onComplete, speak }: { onComplete: (reward: num
 
   const handleEmotionSelect = (e: any) => {
     setSelectedEmotion(e);
-    speak(`Jadzia is feeling ${e.label}! ${e.verse}`);
+    speak(`${childName} is feeling ${e.label}! ${e.verse}`);
   };
 
   const currentQuestion = questions[step];
@@ -130,9 +129,9 @@ export const MorningCheckIn = ({ onComplete, speak }: { onComplete: (reward: num
            <div className="bg-gradient-to-br from-pink-400 to-fuchsia-600 p-8 rounded-[3rem] border-8 border-white shadow-2xl text-white mb-6">
               <div className="text-8xl mb-4">🏠</div>
               <h4 className="text-xl font-black uppercase mb-2">Our Magic Address:</h4>
-              <p className="text-4xl font-black leading-tight bg-white/20 p-4 rounded-2xl tracking-tighter">{HOME_ADDRESS}</p>
+              <p className="text-4xl font-black leading-tight bg-white/20 p-4 rounded-2xl tracking-tighter">{homeAddress}</p>
            </div>
-           <p className="text-pink-700 font-bold italic">Safety first! We live at 26 Oak Hill!</p>
+           <p className="text-pink-700 font-bold italic">Safety first! We live at {homeAddress}!</p>
         </div>
       )}
 
@@ -170,7 +169,7 @@ export const MorningCheckIn = ({ onComplete, speak }: { onComplete: (reward: num
 
       {step === 4 && (
         <div className="flex flex-wrap justify-center gap-4">
-          {EMOTION_OPTIONS.map(e => (
+          {EMOTION_OPTIONS(childName).map(e => (
             <button key={e.id} onClick={() => handleEmotionSelect(e)} className={`w-28 h-36 flex flex-col items-center justify-center rounded-[2.5rem] border-4 transition-all ${selectedEmotion?.id === e.id ? 'bg-fuchsia-500 text-white border-white scale-110 shadow-2xl' : 'bg-white text-fuchsia-300 border-fuchsia-50 hover:border-fuchsia-100'}`}>
               <span className="text-6xl">{e.emoji}</span>
               <span className="text-[10px] font-black uppercase mt-2">{e.label}</span>

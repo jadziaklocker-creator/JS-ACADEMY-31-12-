@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { FidgetToy } from '../types';
 
@@ -58,7 +59,6 @@ export default function FidgetPlay({ toy, onCancel, parentSound, stopAllSpeech }
       }
       soundRef.current.play().catch(() => {});
       const newDolphin = { id: Date.now(), left: Math.random() * 80 + 10 };
-      // Fix: Removed incorrect 'd-' typo that caused 'Cannot find name d' error.
       setDolphins(prev => [...prev, newDolphin]);
       setTimeout(() => setDolphins(prev => prev.filter(d => d.id !== newDolphin.id)), 2500);
 

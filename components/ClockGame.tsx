@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 
-export default function ClockGame({ onComplete, onCancel, speak, parentSound }: { onComplete: (reward: number, time: number, errors: number) => void, onCancel: () => void, speak: (t: string) => void, parentSound?: string }) {
+export default function ClockGame({ onComplete, onCancel, speak, parentSound, childName }: { onComplete: (reward: number, time: number, errors: number) => void, onCancel: () => void, speak: (t: string) => void, parentSound?: string, childName: string }) {
   const [targetHour, setTargetHour] = useState(12);
   const [targetMinute, setTargetMinute] = useState(0);
   const [currentHour, setCurrentHour] = useState(12);
@@ -51,7 +51,7 @@ export default function ClockGame({ onComplete, onCancel, speak, parentSound }: 
       } else {
         setGameState('won');
         const timeTaken = Math.floor((Date.now() - startTime) / 1000);
-        speak("You are a Time Master, Jadzia!");
+        speak(`You are a Time Master, ${childName}!`);
         setTimeout(() => onComplete(30, timeTaken, totalErrors), 3000);
       }
     } else {
