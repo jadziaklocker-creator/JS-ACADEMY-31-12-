@@ -14,10 +14,11 @@ interface LayoutProps {
   speak: (t: string) => void;
   hideNav?: boolean;
   childName: string;
+  customBackground?: string | null;
 }
 
 const Layout: React.FC<LayoutProps> = (props) => {
-  const { children, activeTab, setActiveTab, totalStars, onParentClick, onQuitClick, onGoHome, isParentMode, stopAllSpeech, speak, hideNav, childName } = props;
+  const { children, activeTab, setActiveTab, totalStars, onParentClick, onQuitClick, onGoHome, isParentMode, stopAllSpeech, speak, hideNav, childName, customBackground } = props;
   const [currentTime, setCurrentTime] = useState(new Date());
 
   useEffect(() => {
@@ -28,14 +29,12 @@ const Layout: React.FC<LayoutProps> = (props) => {
   const timeStr = currentTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   const dateStr = currentTime.toLocaleDateString([], { weekday: 'long', day: 'numeric', month: 'long' });
   
-  // Use Browser TTS for system messages - prioritizing Microsoft Zira
   const speakSystem = (text: string) => {
     if (!window.speechSynthesis) return;
     window.speechSynthesis.cancel();
     const utterance = new SpeechSynthesisUtterance(text);
     
     const voices = window.speechSynthesis.getVoices();
-    // Prioritize "Microsoft Zira Desktop" as requested
     const targetVoice = voices.find(v => v.name.toLowerCase().includes('zira')) 
                      || voices.find(v => v.name.includes('Female'))
                      || voices.find(v => v.lang.startsWith('en-US'));
@@ -63,7 +62,10 @@ const Layout: React.FC<LayoutProps> = (props) => {
     : baseTabs;
 
   return (
-    <div className="app-boundary bg-white relative border-x-8 border-pink-100 overflow-hidden">
+    <div 
+      className="app-boundary bg-white relative border-x-8 border-pink-100 overflow-hidden"
+      style={customBackground ? { backgroundImage: `url(${customBackground})`, backgroundSize: 'cover', backgroundPosition: 'center' } : {}}
+    >
       <header className={`flex-none p-6 text-white flex flex-col gap-4 z-[10000] overflow-hidden transition-all duration-1000 ${isParentMode ? 'bg-[#4c1d95] shadow-[0_12px_0_#2e1065]' : 'bg-[#db2777] shadow-[0_12px_0_#9d174d]'}`}>
         <div className="flex justify-between items-center relative z-10">
           <div className="flex items-center gap-3">

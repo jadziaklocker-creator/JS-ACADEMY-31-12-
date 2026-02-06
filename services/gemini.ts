@@ -1,24 +1,33 @@
 
 import { GoogleGenAI, Type, Modality } from "@google/genai";
 
-const SYSTEM_INSTRUCTION = (name: string, grade: string) => `You are EVA, a magical, bubbly guide for 5-year-old ${name}.
+const SYSTEM_INSTRUCTION = (name: string, grade: string, context: string = "") => `You are EVA, a magical, bubbly guide for 5-year-old ${name}.
 Current School Grade: ${grade} (South African Curriculum - CAPS).
-Persona: Friendly, articulate female voice (similar to Microsoft Zira style).
+Persona: Friendly, articulate female voice.
 Language: ALWAYS use South African English (colour, maths). 
-Lingo: Enthusiastic and encouraging ("Awesome", "Terrific").
-Spelling: South African.
-Faith: ${name} is a born-again believer. Use terminology like "Wonderful", "Academy", "Surprise". Avoid "Spells" or "Casting".`;
+Lingo: Enthusiastic and encouraging.
+Faith: ${name} is a born-again believer. Use terminology like "Wonderful", "Academy", "Surprise", "Secret". 
+STRICT INSTRUCTION: Never use words like "Spells", "Casting", "Hexes", "Witchcraft", or "Wizards". 
+GROWTH CONTEXT: ${context}
+INSTRUCTION: Check the Growth Context to see what ${name} has already mastered. 
+1. If she has mastered a topic, do NOT repeat it unless asked for a "Recap".
+2. If she is struggling, prioritize "Recap" and "Reinforcement" for that topic.
+3. If it's a new milestone from the report, create a "New Discovery" lesson.`;
 
-async function callWithRetry(fn: () => Promise<any>, maxRetries = 2): Promise<any> {
+async function callWithRetry(fn: () => Promise<any>, maxRetries = 3): Promise<any> {
   let lastError: any;
   for (let i = 0; i < maxRetries; i++) {
     try {
       return await fn();
     } catch (error: any) {
       lastError = error;
-      if (error?.message?.includes('429')) throw error;
+      const errorMsg = error?.message || "";
+      if (errorMsg.includes('429') || errorMsg.toLowerCase().includes('quota')) {
+        throw new Error("QUOTA_EXCEEDED");
+      }
       if (i < maxRetries - 1) {
-        await new Promise(resolve => setTimeout(resolve, 500 * (i + 1)));
+        // Exponential backoff
+        await new Promise(resolve => setTimeout(resolve, 1000 * (i + 1)));
         continue;
       }
       throw error;
@@ -32,24 +41,25 @@ export const gemini = {
     return callWithRetry(async () => {
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const response = await ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
+        model: 'gemini-3-flash-preview', // Switched to Flash to resolve quota issues
         contents: context ? `Context: ${context}\n${childName} says: ${message}` : message,
         config: { 
-          systemInstruction: SYSTEM_INSTRUCTION(childName, grade),
-          temperature: 0.7,
-          thinkingConfig: { thinkingBudget: 0 }
+          systemInstruction: SYSTEM_INSTRUCTION(childName, grade, context),
+          temperature: 0.7
         }
       });
       return response.text;
     });
   },
 
-  async generateLesson(subject: string, category: string, childName: string, grade: string) {
+  async generateLesson(subject: string, category: string, childName: string, grade: string, context: string = "") {
     return callWithRetry(async () => {
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
-        contents: `Academy lesson for 5yo ${childName} in ${grade}: "${subject}" (${category}). 3 steps, 1 challenge. Ensure it aligns with SA CAPS standards for ${grade}. Use emojis. For visualHints, use short text or single emojis that describe the concept visually.`,
+        contents: `Academy lesson for 5yo ${childName} in ${grade}: "${subject}" (${category}). 
+        Use the Growth Context to decide if this should be a 'Recap' or 'New Discovery'. 
+        3 steps, 1 challenge. Each step MUST have a visualHint (one emoji).`,
         config: {
           responseMimeType: "application/json",
           responseSchema: {
@@ -76,12 +86,12 @@ export const gemini = {
                   content: { type: Type.STRING }
                 },
                 required: ["title", "content"]
-              }
+              },
+              youtubeUrl: { type: Type.STRING }
             },
-            required: ["subject", "parts", "bigGirlChallenge"]
+            required: ["subject", "parts", "bigGirlChallenge", "youtubeUrl"]
           },
-          systemInstruction: `You are Mermaid EVA. Brief, joyful lessons for ${childName} (${grade}) in South Africa.`,
-          thinkingConfig: { thinkingBudget: 0 }
+          systemInstruction: SYSTEM_INSTRUCTION(childName, grade, context)
         }
       });
       return JSON.parse(response.text);
@@ -93,7 +103,7 @@ export const gemini = {
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
-        contents: `Task for ${childName} (${grade}) from prompt: "${prompt}". Assign a South African CAPS category and points. Defaults: 100 points, timeSlot 08:30.`,
+        contents: `Task for ${childName} (${grade}) from prompt: "${prompt}". Assign a CAPS category. Default 100 pts.`,
         config: {
           responseMimeType: "application/json",
           responseSchema: {
@@ -106,8 +116,7 @@ export const gemini = {
             },
             required: ["title", "category", "points", "timeSlot"]
           },
-          systemInstruction: `You are Mermaid EVA. Output a CAPS-aligned task for ${childName} (${grade}).`,
-          thinkingConfig: { thinkingBudget: 0 }
+          systemInstruction: `You are Mermaid EVA. Output a CAPS task for an Academy.`
         }
       });
       return JSON.parse(response.text);
@@ -119,18 +128,7 @@ export const gemini = {
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
-        contents: `Create EXACTLY 7 tasks for ${day} for ${childName} (5yo, ${grade}).
-        
-        KNOWLEDGE FROM PREVIOUS REPORTS: ${reportContext}
-        
-        CRITICAL NOVELTY RULE: Do NOT repeat anything from: [${history.join(', ')}].
-        
-        MANDATORY TASKS:
-        1. Word of the Day (Advanced vocabulary focus)
-        2. Letter of the Day (Phonics focus)
-        3. Number of the Day (Counting/Maths focus)
-        PLUS 4 more tasks from South African CAPS Foundation Phase standards for ${grade}.
-        DISTRIBUTE TIMES across the day.`,
+        contents: `Create 7 Academy tasks for ${day} for ${childName} (${grade}). Report Context: ${reportContext}. Avoid repetition of mastered skills found in the report. No repeat of these specific session titles: [${history.join(', ')}].`,
         config: {
           responseMimeType: "application/json",
           responseSchema: {
@@ -146,8 +144,7 @@ export const gemini = {
               required: ["title", "category", "points", "timeSlot"]
             }
           },
-          systemInstruction: `Expert South African Foundation Phase educator for ${grade}. Never repeat yourself. Use the provided growth reports to identify weak areas or mastered concepts.`,
-          thinkingConfig: { thinkingBudget: 0 }
+          systemInstruction: SYSTEM_INSTRUCTION(childName, grade, reportContext)
         }
       });
       return JSON.parse(response.text);
@@ -158,18 +155,8 @@ export const gemini = {
     return callWithRetry(async () => {
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const response = await ai.models.generateContent({
-        model: 'gemini-3-pro-preview',
-        contents: `Full week South African CAPS curriculum (Mon-Fri) for ${childName} (${grade}). 
-        
-        KNOWLEDGE FROM PREVIOUS REPORTS: ${reportContext}
-        
-        CRITICAL NOVELTY RULE: Do NOT repeat anything from: [${history.join(', ')}].
-        
-        RULES:
-        1. EXACTLY 3 tasks per day.
-        2. Content must align with ${grade} South African standards.
-        3. Subjects: Literacy, Numeracy, Life Skills, Afrikaans, isiZulu, Bible Study. 
-        4. Use South African terminology.`,
+        model: 'gemini-3-flash-preview',
+        contents: `Full week CAPS curriculum for ${childName} Academy (${grade}). 3 tasks per day. Report Context: ${reportContext}. Focus on report goals. No repeat of titles: [${history.join(', ')}].`,
         config: {
           responseMimeType: "application/json",
           responseSchema: {
@@ -186,8 +173,7 @@ export const gemini = {
               required: ["day", "title", "category", "points", "timeSlot"]
             }
           },
-          systemInstruction: `Expert South African Foundation Phase educator. Use the Growth Report context to plan for ${grade} effectively.`,
-          thinkingConfig: { thinkingBudget: 32768 }
+          systemInstruction: SYSTEM_INSTRUCTION(childName, grade, reportContext)
         }
       });
       return JSON.parse(response.text);
@@ -234,8 +220,7 @@ export const gemini = {
             },
             required: ["target", "english", "lang", "icon", "color"]
           },
-          systemInstruction: "Joyful language learning helper.",
-          thinkingConfig: { thinkingBudget: 0 }
+          systemInstruction: "Joyful language learning helper."
         }
       });
       return JSON.parse(response.text);
@@ -260,8 +245,7 @@ export const gemini = {
             },
             required: ["word", "emoji", "definition", "category"]
           },
-          systemInstruction: "You are EVA. Provide a fun word with SA spelling.",
-          thinkingConfig: { thinkingBudget: 0 }
+          systemInstruction: "You are EVA. Provide a fun Academy discovery word."
         }
       });
       return JSON.parse(response.text);

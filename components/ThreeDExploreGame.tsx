@@ -1,125 +1,159 @@
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 
-const SHAPES_3D = [
-  { 
-    name: 'Sphere', 
-    description: 'A sphere is round like a ball!', 
-    render: (rot: { x: number, y: number }) => (
-      <div className="relative w-64 h-64 rounded-full shadow-[inset_-20px_-20px_60px_rgba(0,0,0,0.5),20px_20px_80px_rgba(0,0,0,0.2)] overflow-hidden bg-blue-500">
-        <div 
-          className="absolute inset-[-50%] grid grid-cols-4 grid-rows-4 gap-4 opacity-20 pointer-events-none"
-          style={{ transform: `rotateX(${rot.x}deg) rotateY(${rot.y}deg)` }}
-        >
-          {[...Array(16)].map((_, i) => (
-            <div key={i} className="w-8 h-8 rounded-full bg-white/40 blur-sm" />
-          ))}
-        </div>
-        <div 
-          className="absolute top-[10%] left-[10%] w-[40%] h-[40%] bg-gradient-to-br from-white to-transparent rounded-full blur-xl opacity-90"
-          style={{ transform: `translate(${-rot.y*0.15}px, ${-rot.x*0.15}px)` }}
-        />
-        <div className="absolute inset-0 bg-gradient-to-tr from-black/40 via-transparent to-white/40 rounded-full" />
-        <div className="absolute bottom-[-10px] left-1/2 -translate-x-1/2 w-[80%] h-4 bg-black/20 rounded-full blur-md" />
-      </div>
-    )
-  },
-  { 
-    name: 'Cube', 
-    description: 'A cube is like a dice or a box!',
-    render: (rot: { x: number, y: number }) => (
-      <div style={{ transform: `rotateX(${rot.x}deg) rotateY(${rot.y}deg)`, transformStyle: 'preserve-3d' }} className="w-40 h-40 relative transition-transform duration-100 ease-linear">
-        <div className="absolute inset-0 bg-blue-500/90 border-4 border-white" style={{ transform: 'translateZ(80px)' }} />
-        <div className="absolute inset-0 bg-blue-600/90 border-4 border-white" style={{ transform: 'rotateY(90deg) translateZ(80px)' }} />
-        <div className="absolute inset-0 bg-blue-700/90 border-4 border-white" style={{ transform: 'rotateY(-90deg) translateZ(80px)' }} />
-        <div className="absolute inset-0 bg-blue-800/90 border-4 border-white" style={{ transform: 'rotateX(90deg) translateZ(80px)' }} />
-        <div className="absolute inset-0 bg-blue-400/90 border-4 border-white" style={{ transform: 'rotateX(-90deg) translateZ(80px)' }} />
-        <div className="absolute inset-0 bg-blue-900/90 border-4 border-white" style={{ transform: 'rotateY(180deg) translateZ(80px)' }} />
-      </div>
-    )
-  },
-  { 
-    name: 'Cylinder', 
-    description: 'A cylinder is like a can of soup!',
-    render: (rot: { x: number, y: number }) => (
-      <div style={{ transform: `rotateX(${rot.x}deg) rotateY(${rot.y}deg)`, transformStyle: 'preserve-3d' }} className="w-40 h-64 relative transition-transform duration-100 ease-linear">
-        {[0, 45, 90, 135].map(deg => (
-          <div key={deg} className="absolute inset-0 bg-cyan-400/60 border-x-4 border-white/50" style={{ transform: `rotateY(${deg}deg)` }} />
-        ))}
-        <div className="absolute top-0 w-40 h-40 bg-cyan-200 border-4 border-white rounded-full" style={{ transform: 'translateY(-20px) rotateX(90deg)' }} />
-        <div className="absolute bottom-0 w-40 h-40 bg-cyan-600 border-4 border-white rounded-full" style={{ transform: 'translateY(20px) rotateX(90deg)' }} />
-      </div>
-    )
-  },
-  {
-    name: 'Octahedron',
-    description: 'Eight sides! It looks like two pyramids stuck together!',
-    render: (rot: { x: number, y: number }) => (
-      <div style={{ transform: `rotateX(${rot.x}deg) rotateY(${rot.y}deg)`, transformStyle: 'preserve-3d' }} className="w-40 h-40 relative transition-transform duration-100 ease-linear">
-        <div className="absolute inset-0 bg-emerald-400 border-2 border-white/50" style={{ transform: 'translateY(-20px) rotateY(0deg) rotateX(35deg) translateZ(28px)', clipPath: 'polygon(50% 0%, 0% 100%, 100% 100%)' }} />
-        <div className="absolute inset-0 bg-emerald-500 border-2 border-white/50" style={{ transform: 'translateY(-20px) rotateY(90deg) rotateX(35deg) translateZ(28px)', clipPath: 'polygon(50% 0%, 0% 100%, 100% 100%)' }} />
-        <div className="absolute inset-0 bg-emerald-600 border-2 border-white/50" style={{ transform: 'translateY(-20px) rotateY(180deg) rotateX(35deg) translateZ(28px)', clipPath: 'polygon(50% 0%, 0% 100%, 100% 100%)' }} />
-        <div className="absolute inset-0 bg-emerald-700 border-2 border-white/50" style={{ transform: 'translateY(-20px) rotateY(270deg) rotateX(35deg) translateZ(28px)', clipPath: 'polygon(50% 0%, 0% 100%, 100% 100%)' }} />
-        <div className="absolute inset-0 bg-emerald-400 border-2 border-white/50" style={{ transform: 'translateY(20px) rotateY(0deg) rotateX(-35deg) translateZ(28px) rotate(180deg)', clipPath: 'polygon(50% 0%, 0% 100%, 100% 100%)' }} />
-        <div className="absolute inset-0 bg-emerald-500 border-2 border-white/50" style={{ transform: 'translateY(20px) rotateY(90deg) rotateX(-35deg) translateZ(28px) rotate(180deg)', clipPath: 'polygon(50% 0%, 0% 100%, 100% 100%)' }} />
-        <div className="absolute inset-0 bg-emerald-600 border-2 border-white/50" style={{ transform: 'translateY(20px) rotateY(180deg) rotateX(-35deg) translateZ(28px) rotate(180deg)', clipPath: 'polygon(50% 0%, 0% 100%, 100% 100%)' }} />
-        <div className="absolute inset-0 bg-emerald-700 border-2 border-white/50" style={{ transform: 'translateY(20px) rotateY(270deg) rotateX(-35deg) translateZ(28px) rotate(180deg)', clipPath: 'polygon(50% 0%, 0% 100%, 100% 100%)' }} />
-      </div>
-    )
-  },
-  {
-    name: 'Torus',
-    description: 'A real 3D doughnut! Look through the middle!',
-    render: (rot: { x: number, y: number }) => (
-      <div style={{ transform: `rotateX(${rot.x}deg) rotateY(${rot.y}deg)`, transformStyle: 'preserve-3d' }} className="w-64 h-64 relative flex items-center justify-center transition-transform duration-100 ease-linear">
-        {[...Array(12)].map((_, i) => (
-          <div 
-            key={i} 
-            className="absolute w-48 h-48 border-[15px] border-pink-500 rounded-full" 
-            style={{ 
-              transform: `rotateY(${i * 30}deg)`, 
-              borderColor: `rgba(236, 72, 153, ${0.3 + (i % 2) * 0.4})`,
-              boxShadow: 'inset 0 0 10px rgba(0,0,0,0.1)'
-            }} 
-          />
-        ))}
-        <div className="absolute w-52 h-52 border-[2px] border-white/20 rounded-full animate-pulse" />
-      </div>
-    )
-  },
-  {
-    name: 'Prism',
-    description: 'A triangular prism! It is like a slice of yummy cake!',
-    render: (rot: { x: number, y: number }) => (
-      <div style={{ transform: `rotateX(${rot.x}deg) rotateY(${rot.y}deg)`, transformStyle: 'preserve-3d' }} className="w-40 h-40 relative transition-transform duration-100 ease-linear">
-        <div className="absolute inset-0 bg-purple-500 border-4 border-white" style={{ transform: 'rotateX(90deg) translateZ(-40px)', clipPath: 'polygon(50% 0%, 0% 100%, 100% 100%)' }} />
-        <div className="absolute inset-0 bg-purple-300 border-4 border-white" style={{ transform: 'rotateX(90deg) translateZ(40px)', clipPath: 'polygon(50% 0%, 0% 100%, 100% 100%)' }} />
-        <div className="absolute w-40 h-80 bg-purple-400 border-4 border-white" style={{ transform: 'translateY(-20px) translateZ(35px) rotateX(0deg)' }} />
-        <div className="absolute w-40 h-80 bg-purple-600 border-4 border-white" style={{ transform: 'translateY(-20px) rotateY(120deg) translateZ(35px)' }} />
-        <div className="absolute w-40 h-80 bg-purple-700 border-4 border-white" style={{ transform: 'translateY(-20px) rotateY(-120deg) translateZ(35px)' }} />
-      </div>
-    )
-  }
-];
+interface Point3D { x: number; y: number; z: number }
+interface Face { indices: number[]; color: string; avgZ?: number }
 
 export default function ThreeDExploreGame({ onComplete, onCancel, speak, parentSound }: { onComplete: (r: number) => void, onCancel: () => void, speak: (t: string) => void, parentSound?: string }) {
   const [currentIdx, setCurrentIdx] = useState(0);
-  const [rotation, setRotation] = useState({ x: -20, y: 45 });
+  const [rotation, setRotation] = useState({ x: 0.4, y: 0.6 });
+  const canvasRef = useRef<HTMLCanvasElement>(null);
   const isDragging = useRef(false);
   const lastPos = useRef({ x: 0, y: 0 });
   const voiceRef = useRef<HTMLAudioElement | null>(null);
-  
-  const shape = SHAPES_3D[currentIdx];
 
-  const playParentVoice = () => {
-    if (parentSound && (!voiceRef.current || voiceRef.current.ended)) {
-      voiceRef.current = new Audio(parentSound);
-      voiceRef.current.play().catch(() => {});
+  const SHAPES = useMemo(() => [
+    {
+      name: 'CYLINDER',
+      description: 'A cylinder is like a can of soup!',
+      getGeometry: () => {
+        const vertices: Point3D[] = [];
+        const faces: Face[] = [];
+        const segments = 16;
+        const radius = 60; // Slightly smaller to avoid edges
+        const height = 140;
+
+        for (let i = 0; i < segments; i++) {
+          const theta = (i / segments) * Math.PI * 2;
+          const x = Math.cos(theta) * radius;
+          const z = Math.sin(theta) * radius;
+          vertices.push({ x, y: -height / 2, z }); // Top ring
+          vertices.push({ x, y: height / 2, z });  // Bottom ring
+        }
+
+        for (let i = 0; i < segments; i++) {
+          const next = (i + 1) % segments;
+          faces.push({ indices: [i * 2, next * 2, next * 2 + 1, i * 2 + 1], color: 'rgba(34, 211, 238, 0.4)' });
+        }
+        faces.push({ indices: Array.from({ length: segments }, (_, i) => i * 2), color: 'rgba(207, 250, 254, 0.6)' });
+        faces.push({ indices: Array.from({ length: segments }, (_, i) => (segments - 1 - i) * 2 + 1), color: 'rgba(8, 145, 178, 0.5)' });
+
+        return { vertices, faces };
+      }
+    },
+    {
+      name: 'SPHERE',
+      description: 'A sphere is perfectly round like a ball!',
+      getGeometry: () => {
+        const vertices: Point3D[] = [];
+        const faces: Face[] = [];
+        const rings = 10;
+        const sectors = 14;
+        const radius = 80;
+
+        for (let r = 0; r <= rings; r++) {
+          const phi = (r / rings) * Math.PI;
+          for (let s = 0; s <= sectors; s++) {
+            const theta = (s / sectors) * Math.PI * 2;
+            vertices.push({
+              x: radius * Math.sin(phi) * Math.cos(theta),
+              y: radius * Math.cos(phi),
+              z: radius * Math.sin(phi) * Math.sin(theta)
+            });
+          }
+        }
+        for (let r = 0; r < rings; r++) {
+          for (let s = 0; s < sectors; s++) {
+            const first = r * (sectors + 1) + s;
+            const second = first + sectors + 1;
+            faces.push({ indices: [first, second, second + 1, first + 1], color: 'rgba(59, 130, 246, 0.4)' });
+          }
+        }
+        return { vertices, faces };
+      }
+    },
+    {
+      name: 'CUBE',
+      description: 'A cube has six flat square sides!',
+      getGeometry: () => {
+        const s = 65;
+        const vertices: Point3D[] = [
+          {x:-s, y:-s, z: s}, {x: s, y:-s, z: s}, {x: s, y: s, z: s}, {x:-s, y: s, z: s},
+          {x:-s, y:-s, z:-s}, {x: s, y:-s, z:-s}, {x: s, y: s, z:-s}, {x:-s, y: s, z:-s}
+        ];
+        const faces: Face[] = [
+          {indices:[0,1,2,3], color:'rgba(96, 165, 250, 0.4)'}, {indices:[1,5,6,2], color:'rgba(59, 130, 246, 0.5)'},
+          {indices:[5,4,7,6], color:'rgba(37, 99, 235, 0.4)'}, {indices:[4,0,3,7], color:'rgba(30, 64, 175, 0.4)'},
+          {indices:[4,5,1,0], color:'rgba(147, 197, 253, 0.5)'}, {indices:[3,2,6,7], color:'rgba(30, 58, 138, 0.5)'}
+        ];
+        return { vertices, faces };
+      }
     }
-  };
+  ], []);
+
+  const currentShape = SHAPES[currentIdx];
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const { vertices, faces } = currentShape.getGeometry();
+    const width = canvas.width;
+    const height = canvas.height;
+
+    const render = () => {
+      ctx.clearRect(0, 0, width, height);
+      
+      const projected = vertices.map(v => {
+        // Rotate
+        let x = v.x * Math.cos(rotation.y) - v.z * Math.sin(rotation.y);
+        let z = v.x * Math.sin(rotation.y) + v.z * Math.cos(rotation.y);
+        let y = v.y * Math.cos(rotation.x) - z * Math.sin(rotation.x);
+        z = v.y * Math.sin(rotation.x) + z * Math.cos(rotation.x);
+        
+        // Perspective (Constant 1.0 to keep aspect ratio stable for 5yo)
+        const perspective = 600 / (600 + z);
+        return { x: x * perspective + width / 2, y: y * perspective + height / 2, z: z };
+      });
+
+      // Depth sort
+      const sortedFaces = faces.map(f => {
+        const avgZ = f.indices.reduce((sum, idx) => sum + projected[idx].z, 0) / f.indices.length;
+        return { ...f, avgZ };
+      }).sort((a, b) => b.avgZ - a.avgZ);
+
+      sortedFaces.forEach(f => {
+        ctx.beginPath();
+        f.indices.forEach((idx, i) => {
+          if (i === 0) ctx.moveTo(projected[idx].x, projected[idx].y);
+          else ctx.lineTo(projected[idx].x, projected[idx].y);
+        });
+        ctx.closePath();
+        ctx.fillStyle = f.color;
+        ctx.fill();
+        ctx.strokeStyle = 'white';
+        ctx.lineWidth = 3;
+        ctx.stroke();
+      });
+
+      // Clean blueprint grid
+      ctx.strokeStyle = 'rgba(34, 211, 238, 0.1)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      for(let i=0; i<=10; i++) {
+        const pos = i * (width/10);
+        ctx.moveTo(pos, 0); ctx.lineTo(pos, height);
+        ctx.moveTo(0, pos); ctx.lineTo(width, pos);
+      }
+      ctx.stroke();
+    };
+
+    render();
+  }, [currentIdx, rotation, currentShape]);
 
   const handleStart = (clientX: number, clientY: number) => {
-    playParentVoice();
     isDragging.current = true;
     lastPos.current = { x: clientX, y: clientY };
   };
@@ -128,42 +162,38 @@ export default function ThreeDExploreGame({ onComplete, onCancel, speak, parentS
     if (!isDragging.current) return;
     const dx = clientX - lastPos.current.x;
     const dy = clientY - lastPos.current.y;
-    setRotation(prev => ({
-      x: prev.x - dy * 0.5,
-      y: prev.y + dx * 0.5
-    }));
+    setRotation(prev => ({ x: prev.x + dy * 0.01, y: prev.y + dx * 0.01 }));
     lastPos.current = { x: clientX, y: clientY };
   };
 
-  const handleEnd = () => {
-    isDragging.current = false;
-  };
+  const handleEnd = () => { isDragging.current = false; };
 
-  const nextShape = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    playParentVoice();
-    if (currentIdx < SHAPES_3D.length - 1) {
+  const nextShape = () => {
+    if (parentSound && (!voiceRef.current || voiceRef.current.ended)) {
+      voiceRef.current = new Audio(parentSound);
+      voiceRef.current.play().catch(() => {});
+    }
+    if (currentIdx < SHAPES.length - 1) {
       setCurrentIdx(currentIdx + 1);
-      setRotation({ x: -20, y: 45 });
-      speak(`Next shape: ${SHAPES_3D[currentIdx + 1].name}. ${SHAPES_3D[currentIdx+1].description}`);
+      speak(`Next magic shape: ${SHAPES[currentIdx + 1].name}!`);
     } else {
-      onComplete(30);
+      onComplete(40);
     }
   };
 
   return (
-    <div 
-      onClick={playParentVoice}
-      className="fixed inset-0 z-[2000] bg-indigo-50 flex flex-col items-center p-6 animate-pop overflow-hidden select-none"
-    >
-      <div className="w-full max-w-lg flex justify-between items-center mb-6">
-        <button onClick={(e) => { e.stopPropagation(); onCancel(); }} className="bg-white text-indigo-500 px-8 py-3 rounded-full font-black border-4 border-indigo-100 shadow-lg active:scale-95 transition-all">Back to School 🏫</button>
-        <h2 className="text-indigo-600 font-black text-2xl uppercase tracking-widest">3D Magic</h2>
-      </div>
+    <div className="fixed inset-0 z-[10000] bg-white flex flex-col items-center justify-center p-8 select-none animate-pop overflow-hidden">
+      {/* Top Left Escape Button */}
+      <button 
+        onClick={onCancel} 
+        className="absolute top-10 left-10 bg-white text-indigo-500 w-16 h-16 rounded-full flex items-center justify-center border-4 border-indigo-50 shadow-xl active:scale-90 transition-all text-2xl z-50 hover:bg-indigo-50"
+      >
+        ❌
+      </button>
 
-      <div className="flex-1 flex flex-col items-center justify-center gap-10 w-full max-w-2xl bg-white rounded-[5rem] border-[12px] border-indigo-100 p-10 shadow-inner relative overflow-hidden">
-        
+      <div className="w-full max-w-2xl flex flex-col items-center gap-10">
         <div 
+          className="relative aspect-square w-full max-w-[450px] bg-indigo-50/30 rounded-[5rem] border-[12px] border-white shadow-inner flex items-center justify-center cursor-grab active:cursor-grabbing transition-all overflow-hidden"
           onMouseDown={(e) => handleStart(e.clientX, e.clientY)}
           onMouseMove={(e) => handleMove(e.clientX, e.clientY)}
           onMouseUp={handleEnd}
@@ -171,26 +201,37 @@ export default function ThreeDExploreGame({ onComplete, onCancel, speak, parentS
           onTouchStart={(e) => handleStart(e.touches[0].clientX, e.touches[0].clientY)}
           onTouchMove={(e) => handleMove(e.touches[0].clientX, e.touches[0].clientY)}
           onTouchEnd={handleEnd}
-          className="w-full h-96 flex flex-col items-center justify-center cursor-grab active:cursor-grabbing perspective-1000"
         >
-          {shape.render(rotation)}
+          {/* Internal Grid Decoration */}
+          <div className="absolute inset-0 opacity-20 pointer-events-none bg-[radial-gradient(#4f46e5_1px,transparent_1px)] [background-size:20px_20px]" />
+          
+          <canvas 
+            ref={canvasRef} 
+            width={500} 
+            height={500} 
+            className="w-full h-full object-contain pointer-events-none" 
+          />
         </div>
 
-        <div className="text-center pointer-events-none">
-          <h3 className="text-4xl font-black text-indigo-900 mb-2 uppercase">{shape.name}</h3>
-          <p className="text-indigo-300 font-bold max-w-xs">{shape.description}</p>
+        <div className="text-center space-y-4">
+          <h2 className="text-7xl font-black text-[#2e1065] uppercase tracking-tighter drop-shadow-sm">{currentShape.name}</h2>
+          <p className="text-2xl font-bold text-[#a5b4fc] italic">"{currentShape.description}"</p>
         </div>
 
-        <div className="flex gap-4">
-           <button onClick={nextShape} className="px-10 py-5 bg-indigo-600 text-white rounded-full font-black uppercase border-4 border-white shadow-lg text-xl">
-             {currentIdx === SHAPES_3D.length - 1 ? 'Finish ✅' : 'Next Shape ➡️'}
-           </button>
-        </div>
+        <button 
+          onClick={nextShape} 
+          className="mt-4 px-20 py-8 bg-gradient-to-r from-indigo-500 to-indigo-600 text-white rounded-[2.5rem] font-black text-4xl shadow-[0_12px_0_#3730a3] hover:scale-[1.05] active:translate-y-2 active:shadow-none transition-all uppercase tracking-widest border-4 border-white flex items-center gap-4"
+        >
+          <span>{currentIdx === SHAPES.length - 1 ? "FINISH" : "NEXT SHAPE"}</span>
+          <span className="text-3xl">➡️</span>
+        </button>
       </div>
 
-      <p className="mt-8 text-indigo-400 font-black uppercase tracking-widest text-center pointer-events-none">
-        Drag to spin the {shape.name}!
-      </p>
+      <div className="absolute bottom-8 bg-indigo-50/50 px-10 py-3 rounded-full border-2 border-indigo-100">
+        <p className="text-indigo-200 font-black uppercase text-[10px] tracking-[0.4em]">
+          TOUCH AND SPIN THE MAGIC SHAPE!
+        </p>
+      </div>
     </div>
   );
 }
